@@ -1,0 +1,5 @@
+venv/
+.env
+resume_sync_agent/.env
+__pycache__/
+*.pyc
