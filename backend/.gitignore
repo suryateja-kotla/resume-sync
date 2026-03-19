@@ -18,15 +18,5 @@ __pycache__/
 .vscode/
 .idea/
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Test coverage
-.coverage
-htmlcov/
-
-# Distribution
-dist/
-build/
-*.egg-info/
+# generated documents
+output/
