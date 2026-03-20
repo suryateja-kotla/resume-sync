@@ -1,4 +1,3 @@
-# observability.py
 import os
 import base64
 from opentelemetry import trace

@@ -6,6 +6,8 @@ from fastmcp import FastMCP
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from dotenv import load_dotenv
+from bson import json_util
+import json
 
 load_dotenv()
 
@@ -100,6 +102,61 @@ def log_audit_event(employee_id: str, action: str, details: Optional[Dict] = Non
 
     except PyMongoError as e:
         return {"status": "error", "message": str(e)}
+
+
+@mcp.tool()
+def search_employees(skills: list[str], min_experience: int) -> str:
+    """
+    Search employees based on skills and minimum experience.
+    Returns only employee_ids.
+    """
+    try:
+        skill_queries = [
+            {"search_tags": {"$regex": s, "$options": "i"}} for s in skills
+        ]
+
+        query = {
+            "$and": [
+                {"total_experience": {"$gte": min_experience}},
+                {"$or": skill_queries},
+            ]
+        }
+
+        employees = list(
+            col_employee_resume_data.find(query, {"_id": 0, "employee_id": 1})
+        )
+
+        employee_ids = [emp["employee_id"] for emp in employees]
+
+        return json.dumps(
+            {
+                "status": "success",
+                "count": len(employee_ids),
+                "employee_ids": employee_ids,
+            }
+        )
+
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+@mcp.tool()
+def get_resume_paths(employee_ids: list[str]) -> str:
+    """
+    Fetch resume paths for a list of employee IDs.
+    """
+    try:
+        cursor = col_resume_store.find(
+            {"employee_id": {"$in": employee_ids}},
+            {"_id": 0, "employee_id": 1, "resume_path": 1},
+        )
+
+        results = list(cursor)
+
+        return json.dumps(results, default=json_util.default)
+
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
 
 
 @mcp.tool

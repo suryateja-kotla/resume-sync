@@ -3,6 +3,7 @@ import base64
 import logging
 from services.agent_runner import run_agent
 from tools.docx_tools import DocxTool
+from schemas.schemas import SearchRequest
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -14,6 +15,18 @@ async def health_check():
     return {"status": "ok"}
 
 
+@router.post("/search-employees")
+async def search_employee(request: SearchRequest):
+    response = await run_agent(
+        prompt={
+            "action": "search_employees",
+            "query": request.query,
+            "employee_id": request.employee_id,
+        },
+    )
+    return response
+
+
 @router.post("/upload-resume")
 async def upload_resume(
     file: UploadFile = File(...),
@@ -21,14 +34,6 @@ async def upload_resume(
     employee_email: str = Form(None),
 ):
     try:
-        # 1. Save file locally
-        # os.makedirs(UPLOAD_DIR, exist_ok=True)
-        # file_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{file.filename}")
-
-        # with open(file_path, "wb") as buffer:
-        #     shutil.copyfileobj(file.file, buffer)
-
-        # Read file
         contents = await file.read()
         logging.info(
             f"Received file: {file.filename} (size: {len(contents)} bytes) content_type: {file.content_type}"
@@ -70,6 +75,3 @@ async def upload_resume(
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
-    # finally:
-    #     if os.path.exists(file_path):
-    #         os.remove(file_path)

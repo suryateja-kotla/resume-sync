@@ -16,6 +16,12 @@ ROUTING RULES:
    → Provide ALL input fields clearly and pass ALL fields unchanged.
    → Return EXACT response from ingestion_agent.
 
+2. TALENT SEARCH (action = "search_employees"):
+   Input fields: query (natural language string) which can be user request or job description 
+   → Delegate this task to the query_agent.
+   → Pass all input fields unchanged.
+   → Return the tool's response unchanged
+
 3. UNKNOWN requests:
    → Return {"status": "error", "message": "Unknown action: <action>"}
 

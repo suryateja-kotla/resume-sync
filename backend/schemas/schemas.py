@@ -95,6 +95,11 @@ class UploadResumeRequest(BaseModel):
     email: Optional[str] = None
 
 
+class SearchRequest(BaseModel):
+    query: str
+    employee_id: Optional[str] | None = None
+
+
 class IngestionResult(BaseModel):
     status: str  # success | error
     employee_id: Optional[str] = None
