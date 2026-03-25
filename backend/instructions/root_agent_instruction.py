@@ -7,20 +7,18 @@ ROUTING RULES:
 1. RESUME UPLOAD (action = "ingest_resume"):
     The request looks like a JSON with:
     - action
+    - file_path (path to the uploaded resume file on disk)
     - employee_id
     - employee_email (optional)
-    - EITHER: file_data + mime_type + file_name  (PDF uploads)
-    - OR:     text_content + file_name           (DOCX uploads)
-
    → Delegate this task to the ingestion_agent.
-   → Provide ALL input fields clearly and pass ALL fields unchanged.
+   → Pass all input fields unchanged.
    → Return EXACT response from ingestion_agent.
 
 2. TALENT SEARCH (action = "search_employees"):
    Input fields: query (natural language string) which can be user request or job description 
    → Delegate this task to the query_agent.
    → Pass all input fields unchanged.
-   → Return the tool's response unchanged
+   → Return EXACT response from query_agent.
 
 3. UNKNOWN requests:
    → Return {"status": "error", "message": "Unknown action: <action>"}

@@ -2,11 +2,14 @@ import json
 import os
 import datetime
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 _OUTPUT_DIR = os.getenv("EXCEL_OUTPUT_DIR", "output_excels")
 
 
-def create_talent_excel(employee_data_json: str) -> str:
+def create_talent_excel(employee_data_json: str) -> dict:
     """
     Generates an Excel report containing employee IDs and clickable resume links.
     """
@@ -43,14 +46,12 @@ def create_talent_excel(employee_data_json: str) -> str:
         writer = pd.ExcelWriter(full_path, engine="xlsxwriter")
         df.to_excel(writer, index=False, sheet_name="Search Results")
         writer.close()
-
-        return json.dumps(
-            {
-                "status": "success",
-                "saved_location": full_path,
-                "message": "Excel report generated.",
-            }
-        )
+        return {
+            "status": "success",
+            "saved_location": full_path,
+            "message": "Excel report generated.",
+        }
 
     except Exception as e:
-        return json.dumps({"status": "error", "message": str(e)})
+        logger.error(f"kavya Error generating Excel: {str(e)}")
+        return {"status": "error", "message": str(e)}

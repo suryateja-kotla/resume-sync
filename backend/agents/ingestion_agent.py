@@ -10,6 +10,9 @@ from tools.resume_tool import (
     generate_resume_docx,
 )
 from instructions.ingestion_agent_instruction import INGESTION_AGENT_INSTRUCTION
+from dotenv import load_dotenv
+
+load_dotenv()
 
 _MCP_SERVER_SCRIPT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "mcp_server", "mongo_mcp_server.py")
@@ -27,7 +30,7 @@ mongo_toolset = McpToolset(
 
 ingestion_agent = Agent(
     name="ingestion_agent",
-    model="gemini-2.5-pro",
+    model=os.getenv("MODEL", "gemini-2.5-flash"),
     description="Ingests employee resumes, extracts data, generates DOCX, persists to MongoDB.",
     instruction=INGESTION_AGENT_INSTRUCTION,
     tools=[

@@ -13,11 +13,10 @@ class DocxTool:
     def _create_spacer(self):
         return OxmlElement("w:p")
 
-    def parse_docx_bytes(self, file_bytes: bytes):
-        from io import BytesIO
+    def parse_docx_bytes(self, file_path: str):
         from docx.oxml.ns import qn
 
-        doc = Document(BytesIO(file_bytes))
+        doc = Document(file_path)
         content = []
 
         for block in doc.element.body:

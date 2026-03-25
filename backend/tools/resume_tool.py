@@ -1,4 +1,3 @@
-import base64
 import os
 import json
 import vertexai
@@ -27,45 +26,49 @@ _OUTPUT_DIR = os.getenv("RESUME_OUTPUT_DIR", "output")
 
 def extract_resume(
     employee_id: str,
-    file_data: str = "",
-    text_content: str = "",
+    file_path: str = "",
 ) -> dict:
     """
-    Accepts either base64-encoded PDF (file_data) or plain text (text_content).
-
+    Extracts structured data from a resume file (PDF or DOCX) located at file_path.
     Args:
-        employee_id:  The employee ID to attach to extracted data.
-        file_data:    Base64-encoded PDF bytes (use for PDF uploads).
-        text_content: Plain text resume content (use for DOCX uploads).
-
-    Returns:
-        dict with status and data or message.
+        employee_id: The unique employee ID to associate with the data.
+        file_path: The absolute local path to the PDF or DOCX file.
     """
-    if not file_data and not text_content:
+    if not file_path or not os.path.exists(file_path):
         return {
             "status": "error",
-            "message": "Either file_data or text_content must be provided.",
+            "message": f"File path {file_path} not found or invalid.",
         }
 
     try:
-        model = GenerativeModel("gemini-2.5-pro")
+        model = GenerativeModel(
+            os.getenv("MODEL", "gemini-2.5-flash"),
+        )
+        file_extension = os.path.splitext(file_path)[1].lower()
 
-        if file_data:
+        if file_extension == ".pdf":
+            with open(file_path, "rb") as f:
+                file_bytes = f.read()
+
             response = model.generate_content(
                 [
                     Part.from_data(
-                        data=base64.b64decode(file_data),
+                        data=file_bytes,
                         mime_type="application/pdf",
                     ),
-                    EXTRACTION_INSTRUCTION + f"\nUse employee_id: {employee_id}",
+                    f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}",
                 ]
             )
-        else:
+        elif file_extension == ".docx":
+            extracted_text = _docx_tool.parse_docx_bytes(file_path)
             response = model.generate_content(
-                EXTRACTION_INSTRUCTION
-                + f"\nUse employee_id: {employee_id}"
-                + f"\n\nResume Text:\n{text_content}"
+                f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"
             )
+        else:
+            return {
+                "status": "error",
+                "message": f"Unsupported file type: {file_extension}",
+            }
 
         raw_text = response.text.strip()
 
