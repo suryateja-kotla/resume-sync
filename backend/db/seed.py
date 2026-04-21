@@ -221,7 +221,7 @@ async def seed_database():
             {
                 "employeeId": "EMP001",
                 "fullName": "Kavya Namballa",
-                "email": "kavya.namballa@example.com",
+                "email": "kavya.namballa@sailssoftware.com",
                 "currentRole": "Software Engineer",
                 "department": "Engineering",
                 "status": "Active",
@@ -235,7 +235,7 @@ async def seed_database():
                 "employee_id": "EMP001",
                 "total_experience": 3,
                 "search_tags": ["python", "fastapi", "mongodb", "react", "aws"],
-                "personal_info": {"full_name": "Rahul Kumar"},
+                "personal_info": {"full_name": "Kavya Namballa"},
                 "profile_summary": "Software Engineer with 3 years of experience in backend development using FastAPI and MongoDB. Skilled in building scalable APIs and cloud deployment.",
                 "technical_skills": {
                     "backend": ["Python", "FastAPI", "Node.js"],

@@ -4,7 +4,6 @@ import tempfile
 from fastapi import APIRouter, UploadFile, File, Form
 import logging
 from services.db_service import (
-    get_user_role,
     get_employee_by_email,
     get_employee_resume,
     update_employee_resume,
@@ -29,20 +28,13 @@ async def health_check():
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
-    role = get_user_role(request.email)
     emp = await get_employee_by_email(request.email)
     return LoginResponse(
         email=request.email,
-        role=role,
+        role=emp.get("role") if emp else None,
         employeeId=emp.get("employeeId") if emp else None,
         fullName=emp.get("fullName") if emp else None,
     )
-
-
-@router.post("/search-candidates")
-async def search_candidates(request: CandidateSearchRequest):
-    results = await search_candidates_by_query(request.query)
-    return results
 
 
 @router.get("/employee-profile")
@@ -95,12 +87,12 @@ async def update_employee_profile(request: ProfileUpdateRequest):
     return {"status": "success", "message": "Profile updated"}
 
 
-@router.post("/search-employees")
-async def search_employee(request: SearchRequest):
+@router.post("/search-candidates")
+async def search_candidates(request: SearchRequest):
     from services.agent_runner import run_agent
+
     response = await run_agent(
         prompt={
-            "action": "search_employees",
             "query": request.query,
             "employee_id": request.employee_id,
         },
@@ -115,6 +107,7 @@ async def upload_resume(
     employee_email: str = Form(None),
 ):
     from services.agent_runner import run_agent
+
     file_path = None
     try:
         suffix = os.path.splitext(file.filename)[1]
@@ -123,7 +116,7 @@ async def upload_resume(
             file_path = tmp.name
         response = await run_agent(
             prompt={
-                "action": "ingest_resume",
+                "action": "Ingest Resume File",
                 "file_path": file_path,
                 "employee_id": employee_id,
                 "employee_email": employee_email,

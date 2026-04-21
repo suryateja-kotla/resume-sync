@@ -23,7 +23,7 @@ export default function Login() {
         employeeId: data.employeeId ?? null,
         fullName: data.fullName ?? null,
       })
-      navigate(data.role === 'hr' ? '/hr-dashboard' : '/employee-dashboard')
+      navigate(data.role === 'HR' ? '/hr-dashboard' : '/employee-dashboard')
     } catch {
       setError('Login failed. Please check your email and try again.')
     } finally {
@@ -91,11 +91,11 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-gray-100">
+          {/* <div className="mt-6 pt-6 border-t border-gray-100">
             <p className="text-xs text-gray-400 text-center">
               HR accounts: email containing "hr" · Employee accounts: any other email
             </p>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

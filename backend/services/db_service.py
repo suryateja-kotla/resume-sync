@@ -9,12 +9,6 @@ _client = AsyncIOMotorClient(MONGO_URI)
 db = _client[DB_NAME]
 
 
-def get_user_role(email: str) -> str:
-    if "hr" in email.lower():
-        return "hr"
-    return "employee"
-
-
 async def get_employee_by_email(email: str) -> Optional[dict]:
     return await db.employee_data.find_one({"email": email}, {"_id": 0})
 
@@ -49,7 +43,9 @@ async def search_candidates_by_query(query: str) -> list:
             {"employeeId": emp_id}, {"_id": 0, "email": 1}
         )
         email = emp.get("email", "") if emp else ""
-        skills = [tag for vals in doc.get("technical_skills", {}).values() for tag in vals]
+        skills = [
+            tag for vals in doc.get("technical_skills", {}).values() for tag in vals
+        ]
         results.append(
             {
                 "name": doc.get("personal_info", {}).get("full_name", ""),

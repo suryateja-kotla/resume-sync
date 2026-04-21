@@ -14,7 +14,7 @@ export default function App() {
           <Route
             path="/hr-dashboard"
             element={
-              <ProtectedRoute requiredRole="hr">
+              <ProtectedRoute requiredRole="HR">
                 <HRDashboard />
               </ProtectedRoute>
             }
@@ -22,7 +22,7 @@ export default function App() {
           <Route
             path="/employee-dashboard"
             element={
-              <ProtectedRoute requiredRole="employee">
+              <ProtectedRoute requiredRole="EMPLOYEE">
                 <EmployeeDashboard />
               </ProtectedRoute>
             }
