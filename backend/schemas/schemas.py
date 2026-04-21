@@ -53,7 +53,7 @@ class EmployeePayload(BaseModel):
         tags = []
         for values in self.technical_skills.values():
             tags.extend(values)
-        return list(set(tags))  # deduplicate
+        return list(set(tags))
 
 
 class BulkEmployees(BaseModel):
@@ -68,7 +68,7 @@ class EmployeeDataDocument(BaseModel):
     email: Optional[str] = None
     currentRole: Optional[str] = None
     department: Optional[str] = None
-    status: str = "Active"  # Active | Inactive | On Leave
+    status: str = "Active"
     lastProfileUpdate: Optional[datetime] = None
 
 
@@ -76,7 +76,7 @@ class ResumeStoreDocument(BaseModel):
     """Mirrors resume_store collection."""
 
     employee_id: str
-    resume_path: str  # local .docx path (or S3 key later)
+    resume_path: str
     last_updated_at: datetime = Field(default_factory=datetime.now(UTC))
 
 
@@ -85,7 +85,7 @@ class AuditEventDocument(BaseModel):
 
     employeeId: str
     timestamp: datetime = Field(default_factory=datetime.now(UTC))
-    action: str  # USER_APPROVED | USER_EDITED | RESUME_UPDATE_REJECTED
+    action: str
     details: Optional[Dict[str, Any]] = None
 
 
@@ -101,7 +101,44 @@ class SearchRequest(BaseModel):
 
 
 class IngestionResult(BaseModel):
-    status: str  # success | error
+    status: str
     employee_id: Optional[str] = None
     resume_docx_path: Optional[str] = None
     message: Optional[str] = None
+
+
+# Auth schemas
+class LoginRequest(BaseModel):
+    email: str
+
+
+class LoginResponse(BaseModel):
+    email: str
+    role: str
+    employeeId: Optional[str] = None
+    fullName: Optional[str] = None
+
+
+# Candidate search
+class CandidateSearchRequest(BaseModel):
+    query: str
+
+
+class CandidateResult(BaseModel):
+    name: str
+    skills: List[str]
+    experience: int
+    email: str
+
+
+# Employee profile
+class ProfileUpdateRequest(BaseModel):
+    email: str
+    profile_summary: Optional[str] = None
+    technical_skills: Optional[Dict[str, List[str]]] = None
+    total_experience: Optional[int] = None
+    personal_info: Optional[Dict[str, str]] = None
+    education: Optional[List[Dict[str, Any]]] = None
+    certifications: Optional[List[str]] = None
+    achievements: Optional[List[str]] = None
+    interests: Optional[List[str]] = None
