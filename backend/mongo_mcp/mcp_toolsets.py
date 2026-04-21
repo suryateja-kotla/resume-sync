@@ -10,7 +10,7 @@ _MCP_SERVER_SCRIPT = os.path.abspath(
 
 
 def get_query_agent_toolset():
-    McpToolset(
+    return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
                 command=sys.executable,
@@ -23,7 +23,7 @@ def get_query_agent_toolset():
 
 
 def get_ingestion_agent_toolset():
-    McpToolset(
+    return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
                 command=sys.executable,

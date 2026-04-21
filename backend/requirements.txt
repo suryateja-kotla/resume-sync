@@ -13,7 +13,7 @@ python-dotenv
 
 # MongoDB
 pymongo
-motor 
+motor
 
 # MCP server
 fastmcp
