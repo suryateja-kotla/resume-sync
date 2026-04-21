@@ -1,7 +1,10 @@
+import logging
 from motor.motor_asyncio import AsyncIOMotorClient
+from datetime import datetime, timezone
 
 MONGO_URI = "mongodb://localhost:27017"
-DB_NAME = "employee_registry"
+DB_NAME = "employee_registry_local"
+logger = logging.getLogger(__name__)
 
 
 async def seed_database():
@@ -196,3 +199,109 @@ async def seed_database():
         )
 
     print("Database & collections initialized")
+    # Check if already seeded
+    existing = await db.employee_data.find_one({"employeeId": "EMP001"})
+    if not existing:
+        # HR USER
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "HR001",
+                "fullName": "Naveen",
+                "email": "hr@sailssoftware.com",
+                "currentRole": "HR Manager",
+                "department": "Human Resources",
+                "status": "Active",
+                "role": "HR",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+
+        # EMPLOYEE USER
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP001",
+                "fullName": "Kavya Namballa",
+                "email": "kavya.namballa@example.com",
+                "currentRole": "Software Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+
+        await db.employee_resume_data.insert_one(
+            {
+                "employee_id": "EMP001",
+                "total_experience": 3,
+                "search_tags": ["python", "fastapi", "mongodb", "react", "aws"],
+                "personal_info": {"full_name": "Rahul Kumar"},
+                "profile_summary": "Software Engineer with 3 years of experience in backend development using FastAPI and MongoDB. Skilled in building scalable APIs and cloud deployment.",
+                "technical_skills": {
+                    "backend": ["Python", "FastAPI", "Node.js"],
+                    "frontend": ["React"],
+                    "database": ["MongoDB", "PostgreSQL"],
+                    "cloud": ["AWS"],
+                },
+                "work_experience": [
+                    {
+                        "company": {
+                            "name": "TechNova Solutions",
+                            "description": "A SaaS company focused on retail analytics",
+                        },
+                        "designation": "Software Engineer",
+                        "duration": "Jan 2023 - Present",
+                        "project": {
+                            "name": "Retail AI Platform",
+                            "client": "Internal",
+                            "role": "Backend Developer",
+                            "environment": ["Python", "FastAPI", "MongoDB", "Docker"],
+                            "project_description": "Developed APIs for AI-driven inventory forecasting and monitoring system.",
+                            "responsibilities": [
+                                "Designed REST APIs using FastAPI",
+                                "Integrated MongoDB for scalable data storage",
+                                "Worked on real-time data pipelines",
+                                "Collaborated with frontend team",
+                            ],
+                        },
+                    },
+                    {
+                        "company": {"name": "CodeCraft Pvt Ltd", "description": None},
+                        "designation": "Junior Developer",
+                        "duration": "Jun 2022 - Dec 2022",
+                        "project": {
+                            "name": "HR Management System",
+                            "client": "Internal",
+                            "role": "Full Stack Developer",
+                            "environment": ["Node.js", "React", "MongoDB"],
+                            "project_description": "Built employee management and resume tracking system.",
+                            "responsibilities": [
+                                "Developed CRUD APIs",
+                                "Built UI components in React",
+                                "Handled database schema design",
+                            ],
+                        },
+                    },
+                ],
+                "education": [
+                    {
+                        "year": "2022",
+                        "institution": "JNTU Hyderabad",
+                        "stream": "Computer Science",
+                        "cgpa": 8.2,
+                    }
+                ],
+                "certifications": [
+                    "AWS Certified Developer Associate",
+                    "MongoDB Basics Certification",
+                ],
+                "achievements": [
+                    "Employee of the Month - March 2024",
+                    "Built internal automation tool reducing manual work by 40%",
+                ],
+                "interests": ["Open Source Contribution", "System Design", "AI/ML"],
+            }
+        )
+        logger.info("Seed data inserted successfully.")
+    else:
+        logger.info("Seed data already exists, skipping...")
