@@ -388,13 +388,14 @@ export default function EmployeeDashboard() {
       const { data } = await api.post('/upload-resume', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      if (data.status === 'success') {
+      const reply = data.reply ?? data
+      if (reply.status === 'success') {
         setUploadMsg('Resume uploaded and processed successfully!')
         setUploadFile(null)
         if (fileRef.current) fileRef.current.value = ''
         await fetchProfile()
       } else {
-        setUploadMsg(data.message || 'Upload failed. Please try again.')
+        setUploadMsg(reply.message || data.message || 'Upload failed. Please try again.')
       }
     } catch {
       setUploadMsg('Upload failed. Please try again.')
