@@ -8,7 +8,7 @@ python-multipart
 google-adk
 
 # Google Generative AI (Gemini)
-# google-generativeai
+google-genai
 python-dotenv
 
 # MongoDB

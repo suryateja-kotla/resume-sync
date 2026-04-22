@@ -1,19 +1,19 @@
 import os
 import json
-import vertexai
-from vertexai.generative_models import GenerativeModel, Part
-from dotenv import load_dotenv
+from google import genai
 import logging
 from tools.docx_tools import DocxTool
 from tools.normalizer import ResumeNormalizer
 from schemas.schemas import EmployeePayload
 from instructions.extraction_instruction import EXTRACTION_INSTRUCTION
 
-load_dotenv()
 logger = logging.getLogger(__name__)
-vertexai.init(
-    project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-    location=os.getenv("GOOGLE_CLOUD_LOCATION"),
+
+client = genai.Client(
+    # vertexai=True,
+    # project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+    # location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+    api_key=os.getenv("GOOGLE_API_KEY"),
 )
 
 _docx_tool = DocxTool()
@@ -41,29 +41,49 @@ def extract_resume(
         }
 
     try:
-        model = GenerativeModel(
-            os.getenv("MODEL", "gemini-2.5-flash"),
-        )
         file_extension = os.path.splitext(file_path)[1].lower()
 
         if file_extension == ".pdf":
             with open(file_path, "rb") as f:
                 file_bytes = f.read()
 
-            response = model.generate_content(
-                [
-                    Part.from_data(
-                        data=file_bytes,
-                        mime_type="application/pdf",
-                    ),
-                    f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}",
-                ]
+            response = client.models.generate_content(
+                model=os.getenv("MODEL", "gemini-2.5-flash"),
+                contents=[
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "application/pdf",
+                                    "data": file_bytes,
+                                }
+                            },
+                            {
+                                "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}"
+                            },
+                        ],
+                    }
+                ],
             )
+
         elif file_extension == ".docx":
             extracted_text = _docx_tool.parse_docx_bytes(file_path)
-            response = model.generate_content(
-                f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"
+
+            response = client.models.generate_content(
+                model=os.getenv("MODEL", "gemini-2.5-flash"),
+                contents=[
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"
+                            }
+                        ],
+                    }
+                ],
             )
+
         else:
             return {
                 "status": "error",
