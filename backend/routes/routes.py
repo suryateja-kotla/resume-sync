@@ -4,11 +4,13 @@ import tempfile
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 import logging
+from tools.resume_tool import generate_resume_docx
 from services.db_service import (
     get_employee_by_email,
-    get_employee_resume,
-    update_employee_resume,
-    search_candidates_by_query,
+    get_employee_resume_data,
+    get_resume_path,
+    save_employee_resume_data,
+    upsert_resume_path,
 )
 from schemas.schemas import (
     LoginRequest,
@@ -42,7 +44,7 @@ async def get_employee_profile(email: str):
     emp = await get_employee_by_email(email)
     if not emp:
         return {"status": "error", "message": "Employee not found"}
-    resume = await get_employee_resume(emp.get("employeeId", ""))
+    resume = await get_employee_resume_data(emp.get("employeeId", ""))
     return {
         "status": "success",
         "data": {
@@ -63,7 +65,7 @@ async def update_employee_profile(request: ProfileUpdateRequest):
         return {"status": "error", "message": "Employee not found"}
 
     employee_id = emp.get("employeeId", "")
-    existing_resume = await get_employee_resume(employee_id) or {}
+    existing_resume = await get_employee_resume_data(employee_id) or {}
 
     updated = {**existing_resume}
     if request.profile_summary is not None:
@@ -85,7 +87,19 @@ async def update_employee_profile(request: ProfileUpdateRequest):
     if request.work_experience is not None:
         updated["work_experience"] = request.work_experience
 
-    await update_employee_resume(employee_id, updated)
+    await save_employee_resume_data(employee_id, updated)
+    existing_resume_path = await get_resume_path(employee_id)
+    if existing_resume_path:
+        try:
+            os.remove(existing_resume_path)
+        except Exception as e:
+            logger.error(f"Failed to remove old resume file: {e}")
+    result = await generate_resume_docx(employee_id)
+    if result.get("status") != "success":
+        return result
+    resume_path = result.get("resume_path")
+    await upsert_resume_path(employee_id, resume_path)
+
     return {"status": "success", "message": "Profile updated"}
 
 

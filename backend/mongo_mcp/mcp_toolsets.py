@@ -31,5 +31,5 @@ def get_ingestion_agent_toolset():
             ),
             timeout=120,
         ),
-        tool_filter=["save_employee_resume_profile", "log_audit_event"],
+        tool_filter=["save_resume_path"],
     )

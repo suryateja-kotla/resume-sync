@@ -5,6 +5,10 @@ import logging
 from tools.docx_tools import DocxTool
 from tools.normalizer import ResumeNormalizer
 from schemas.schemas import EmployeePayload
+from services.db_service import (
+    get_employee_resume_data,
+    save_employee_resume_data,
+)
 from instructions.extraction_instruction import EXTRACTION_INSTRUCTION
 
 logger = logging.getLogger(__name__)
@@ -24,7 +28,7 @@ _TEMPLATE_PATH = os.getenv(
 _OUTPUT_DIR = os.getenv("RESUME_OUTPUT_DIR", "output")
 
 
-def extract_resume(
+async def extract_resume(
     employee_id: str,
     file_path: str = "",
 ) -> dict:
@@ -102,7 +106,11 @@ def extract_resume(
         extracted["employee_id"] = employee_id
 
         payload = EmployeePayload(**extracted)
-        return {"status": "success", "data": payload.model_dump()}
+        await save_employee_resume_data(employee_id, payload.model_dump())
+
+        return {
+            "message": "Resume extracted and saved successfully.",
+        }
 
     except json.JSONDecodeError as e:
         return {"status": "error", "message": f"Gemini returned invalid JSON: {str(e)}"}
@@ -110,32 +118,25 @@ def extract_resume(
         return {"status": "error", "message": f"Extraction failed: {str(e)}"}
 
 
-def generate_resume_docx(employee_payload_dict: dict) -> dict:
+async def generate_resume_docx(employee_id: str) -> dict:
     """
     Generate a formatted .docx resume from structured employee data.
-
-    Args:
-        employee_payload_dict: A dict matching the EmployeePayload schema.
-                               This is the 'data' field returned by extract_resume function.
-
+    Args: employee_id
     Returns:
         A dict with:
           - status:      "success" or "error"
           - resume_path: Absolute path to the generated .docx file (on success)
           - message:     Error reason (on error)
     """
-    if "data" in employee_payload_dict and "status" in employee_payload_dict:
-        employee_payload_dict = employee_payload_dict["data"]
-    try:
-        # Validate and coerce the dict into a typed payload
-        payload = EmployeePayload(**employee_payload_dict)
 
-        if not payload.employee_id:
+    try:
+        payload = await get_employee_resume_data(employee_id)
+        if not payload:
             return {
                 "status": "error",
-                "message": "employee_id is required to generate resume",
+                "message": f"No resume data found for employee_id {employee_id}",
             }
-
+        payload = EmployeePayload(**payload)
         # Normalize to template format
         norm_result = _normalizer.normalize(payload)
         if norm_result["status"] == "error":
