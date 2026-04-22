@@ -226,7 +226,7 @@ def search_employees_and_get_resume_paths(
     Search employees based on skills and experience range.
     - min_experience is required
     - max_experience is optional
-    Returns resume paths for matching employees.
+    Returns enriched list with employee_id, name, email, resume_path, skills, experience.
     """
     search_result_json = search_employees(skills, min_experience, max_experience)
 
@@ -237,7 +237,44 @@ def search_employees_and_get_resume_paths(
     if not employee_ids:
         return json.dumps({"status": "success", "count": 0, "data": []})
 
-    return get_resume_paths(employee_ids)
+    resume_paths = {
+        doc["employee_id"]: doc.get("resume_path", "")
+        for doc in col_resume_store.find(
+            {"employee_id": {"$in": employee_ids}},
+            {"_id": 0, "employee_id": 1, "resume_path": 1},
+        )
+    }
+
+    employee_info = {
+        doc["employeeId"]: doc
+        for doc in col_employee_data.find(
+            {"employeeId": {"$in": employee_ids}},
+            {"_id": 0, "employeeId": 1, "email": 1, "fullName": 1},
+        )
+    }
+
+    resume_data = {
+        doc["employee_id"]: doc
+        for doc in col_employee_resume_data.find(
+            {"employee_id": {"$in": employee_ids}},
+            {"_id": 0, "employee_id": 1, "search_tags": 1, "total_experience": 1},
+        )
+    }
+
+    results = []
+    for emp_id in employee_ids:
+        info = employee_info.get(emp_id, {})
+        rdata = resume_data.get(emp_id, {})
+        results.append({
+            "employee_id": emp_id,
+            "name": info.get("fullName", ""),
+            "email": info.get("email", ""),
+            "resume_path": resume_paths.get(emp_id, ""),
+            "skills": rdata.get("search_tags", []),
+            "experience": rdata.get("total_experience", 0),
+        })
+
+    return json.dumps({"status": "success", "count": len(results), "data": results})
 
 
 @mcp.tool

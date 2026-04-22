@@ -137,3 +137,4 @@ class ProfileUpdateRequest(BaseModel):
     certifications: Optional[List[str]] = None
     achievements: Optional[List[str]] = None
     interests: Optional[List[str]] = None
+    work_experience: Optional[List[Dict[str, Any]]] = None

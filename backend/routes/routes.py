@@ -1,7 +1,8 @@
 import os
 import shutil
 import tempfile
-from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi.responses import FileResponse
 import logging
 from services.db_service import (
     get_employee_by_email,
@@ -81,6 +82,8 @@ async def update_employee_profile(request: ProfileUpdateRequest):
         updated["achievements"] = request.achievements
     if request.interests is not None:
         updated["interests"] = request.interests
+    if request.work_experience is not None:
+        updated["work_experience"] = request.work_experience
 
     await update_employee_resume(employee_id, updated)
     return {"status": "success", "message": "Profile updated"}
@@ -96,7 +99,29 @@ async def search_candidates(request: CandidateSearchRequest):
             "employee_id": request.employee_id,
         },
     )
-    return response
+    reply = response.get("reply", {})
+    excel_path = reply.get("excel_path")
+    excel_filename = os.path.basename(excel_path) if excel_path else None
+    return {
+        "status": reply.get("status", "error"),
+        "count": reply.get("count", 0),
+        "candidates": reply.get("candidates", []),
+        "excel_filename": excel_filename,
+    }
+
+
+@router.get("/download-excel")
+async def download_excel(filename: str):
+    output_dir = os.getenv("EXCEL_OUTPUT_DIR", "output_excels")
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(output_dir, safe_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        file_path,
+        filename=safe_filename,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @router.post("/upload-resume")

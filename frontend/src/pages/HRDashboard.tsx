@@ -4,10 +4,12 @@ import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 
 interface Candidate {
+  employee_id: string
   name: string
+  email: string
   skills: string[]
   experience: number
-  email: string
+  resume_path?: string
 }
 
 interface Message {
@@ -15,6 +17,7 @@ interface Message {
   type: 'user' | 'assistant'
   text?: string
   candidates?: Candidate[]
+  excel_filename?: string
   loading?: boolean
 }
 
@@ -22,16 +25,18 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
       <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-gray-800">{candidate.name || 'Unknown'}</h3>
+        <div className="min-w-0">
+          <h3 className="font-semibold text-gray-800 truncate">{candidate.name || candidate.employee_id}</h3>
           <a href={`mailto:${candidate.email}`} className="text-blue-500 text-sm hover:underline">
             {candidate.email}
           </a>
+          <p className="text-gray-400 text-xs mt-0.5">ID: {candidate.employee_id}</p>
         </div>
-        <span className="bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full">
+        <span className="bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ml-2">
           {candidate.experience} yr{candidate.experience !== 1 ? 's' : ''}
         </span>
       </div>
+
       <div className="flex flex-wrap gap-1.5">
         {candidate.skills.slice(0, 6).map((skill, i) => (
           <span key={i} className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
@@ -82,7 +87,8 @@ export default function HRDashboard() {
 
     try {
       const { data } = await api.post('/search-candidates', { query })
-      const candidates: Candidate[] = Array.isArray(data) ? data : []
+      const candidates: Candidate[] = data.candidates || []
+      const excel_filename: string | undefined = data.excel_filename || undefined
       setMessages(prev =>
         prev.map(m =>
           m.id === loadingMsg.id
@@ -93,6 +99,7 @@ export default function HRDashboard() {
                   ? 'No candidates found matching your query. Try different skills or experience range.'
                   : `Found ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}:`,
                 candidates: candidates.length > 0 ? candidates : undefined,
+                excel_filename: candidates.length > 0 ? excel_filename : undefined,
               }
             : m
         )
@@ -235,10 +242,25 @@ export default function HRDashboard() {
                           </div>
                         )}
                         {msg.candidates && msg.candidates.length > 0 && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {msg.candidates.map((c, i) => (
-                              <CandidateCard key={i} candidate={c} />
-                            ))}
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {msg.candidates.map((c, i) => (
+                                <CandidateCard key={i} candidate={c} />
+                              ))}
+                            </div>
+                            {msg.excel_filename && (
+                              <a
+                                href={`http://localhost:8000/api/download-excel?filename=${encodeURIComponent(msg.excel_filename)}`}
+                                download={msg.excel_filename}
+                                className="inline-flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 text-sm font-medium px-4 py-2 rounded-lg transition"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Download Excel Report
+                              </a>
+                            )}
                           </div>
                         )}
                       </>

@@ -12,6 +12,18 @@ interface Education {
   cgpa: number
 }
 
+interface WorkExperienceItem {
+  company: { name: string; description?: string }
+  designation: string
+  duration: string
+  project?: {
+    name?: string
+    environment?: string[]
+    project_description?: string
+    responsibilities?: string[]
+  }
+}
+
 interface ProfileData {
   employeeId?: string
   fullName?: string
@@ -27,6 +39,7 @@ interface ProfileData {
     achievements?: string[]
     interests?: string[]
     personal_info?: { full_name: string }
+    work_experience?: WorkExperienceItem[]
   }
 }
 
@@ -49,7 +62,8 @@ export default function EmployeeDashboard() {
   // Edit form state
   const [editSummary, setEditSummary] = useState('')
   const [editExperience, setEditExperience] = useState(0)
-  const [editSkillsRaw, setEditSkillsRaw] = useState('') // JSON-like string
+  const [editSkillsRaw, setEditSkillsRaw] = useState('')
+  const [editWorkExpRaw, setEditWorkExpRaw] = useState('')
 
   useEffect(() => {
     if (user?.email) fetchProfile()
@@ -67,6 +81,33 @@ export default function EmployeeDashboard() {
     }
   }
 
+  const formatWorkExpToText = (workExp: WorkExperienceItem[]): string =>
+    workExp.map(we => {
+      const skills = we.project?.environment?.join(', ') || ''
+      const skillsPart = skills ? `: ${skills}` : ''
+      return `${we.designation} at ${we.company.name} (${we.duration})${skillsPart}`
+    }).join('\n')
+
+  const parseWorkExp = (raw: string): WorkExperienceItem[] =>
+    raw.split('\n').filter(l => l.trim()).map(line => {
+      const colonIdx = line.indexOf(':')
+      const mainPart = colonIdx >= 0 ? line.slice(0, colonIdx).trim() : line.trim()
+      const skillsPart = colonIdx >= 0 ? line.slice(colonIdx + 1).trim() : ''
+      const durationMatch = mainPart.match(/\(([^)]+)\)/)
+      const duration = durationMatch?.[1] || ''
+      const withoutDuration = mainPart.replace(/\([^)]+\)/, '').trim()
+      const atIdx = withoutDuration.lastIndexOf(' at ')
+      const designation = atIdx >= 0 ? withoutDuration.slice(0, atIdx).trim() : withoutDuration
+      const company = atIdx >= 0 ? withoutDuration.slice(atIdx + 4).trim() : ''
+      const environment = skillsPart ? skillsPart.split(',').map(s => s.trim()).filter(Boolean) : []
+      return {
+        company: { name: company },
+        designation,
+        duration,
+        project: { name: 'Project', environment, project_description: '', responsibilities: [] },
+      }
+    })
+
   const startEdit = () => {
     const r = profile?.resume
     setEditSummary(r?.profile_summary || '')
@@ -78,6 +119,7 @@ export default function EmployeeDashboard() {
             .join('\n')
         : ''
     )
+    setEditWorkExpRaw(r?.work_experience ? formatWorkExpToText(r.work_experience) : '')
     setEditMode(true)
     setSaveMsg('')
   }
@@ -103,6 +145,7 @@ export default function EmployeeDashboard() {
         total_experience: editExperience,
         technical_skills: parseSkills(editSkillsRaw),
         personal_info: profile?.resume?.personal_info,
+        work_experience: parseWorkExp(editWorkExpRaw),
       })
       setSaveMsg('Profile saved successfully!')
       setEditMode(false)
@@ -291,6 +334,22 @@ export default function EmployeeDashboard() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm font-mono resize-none"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Work Experience
+                    </label>
+                    <p className="text-xs text-gray-400 mb-2">
+                      Format: Role at Company (Duration): skill1, skill2 &nbsp;·&nbsp; One entry per line
+                    </p>
+                    <textarea
+                      value={editWorkExpRaw}
+                      onChange={e => setEditWorkExpRaw(e.target.value)}
+                      rows={4}
+                      placeholder={'Backend Developer at TechNova (Jan 2022 - Present): Java, Spring Boot, MongoDB\nFull Stack Developer at CodeCraft (Jun 2020 - Dec 2021): React, Node.js'}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm font-mono resize-none"
+                    />
+                  </div>
                 </div>
 
                 {saveMsg && (
@@ -392,6 +451,45 @@ export default function EmployeeDashboard() {
                                 {s}
                               </span>
                             ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Work Experience */}
+                {resume?.work_experience && resume.work_experience.length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Work Experience</h3>
+                    <div className="space-y-5">
+                      {resume.work_experience.map((we, i) => (
+                        <div key={i} className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-medium text-gray-800 text-sm">{we.designation}</p>
+                                <p className="text-gray-500 text-xs mt-0.5">{we.company.name}</p>
+                              </div>
+                              {we.duration && (
+                                <span className="text-xs text-gray-400 whitespace-nowrap">{we.duration}</span>
+                              )}
+                            </div>
+                            {we.project?.environment && we.project.environment.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {we.project.environment.map((skill, j) => (
+                                  <span key={j} className="bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full font-medium">
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
