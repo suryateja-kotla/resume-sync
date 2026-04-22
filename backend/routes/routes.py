@@ -88,7 +88,7 @@ async def update_employee_profile(request: ProfileUpdateRequest):
 
 
 @router.post("/search-candidates")
-async def search_candidates(request: SearchRequest):
+async def search_candidates(request: CandidateSearchRequest):
     from services.agent_runner import run_agent
 
     response = await run_agent(
@@ -116,7 +116,7 @@ async def upload_resume(
             file_path = tmp.name
         response = await run_agent(
             prompt={
-                "action": "Ingest Resume File",
+                "action": "ingest_resume",
                 "file_path": file_path,
                 "employee_id": employee_id,
                 "employee_email": employee_email,

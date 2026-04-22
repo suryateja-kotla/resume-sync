@@ -95,11 +95,6 @@ class UploadResumeRequest(BaseModel):
     email: Optional[str] = None
 
 
-class SearchRequest(BaseModel):
-    query: str
-    employee_id: Optional[str] | None = None
-
-
 class IngestionResult(BaseModel):
     status: str
     employee_id: Optional[str] = None
@@ -119,9 +114,9 @@ class LoginResponse(BaseModel):
     fullName: Optional[str] = None
 
 
-# Candidate search
 class CandidateSearchRequest(BaseModel):
     query: str
+    employee_id: Optional[str] | None = None
 
 
 class CandidateResult(BaseModel):
