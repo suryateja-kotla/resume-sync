@@ -29,22 +29,6 @@ interface WorkExpEdit {
   projects: ProjectInEntry[]
 }
 
-interface ProjectEdit {
-  name: string
-  description: string
-  technologies: string
-  role: string
-  duration: string
-}
-
-interface StandaloneProject {
-  name: string
-  description?: string
-  technologies?: string[]
-  role?: string
-  duration?: string
-}
-
 interface WorkExperienceItem {
   company: { name: string; description?: string }
   designation: string
@@ -82,7 +66,6 @@ interface ProfileData {
     interests?: string[]
     personal_info?: { full_name: string }
     work_experience?: WorkExperienceItem[]
-    projects?: StandaloneProject[]
   }
 }
 
@@ -126,9 +109,8 @@ export default function EmployeeDashboard() {
 
   const [editSummary, setEditSummary] = useState('')
   const [editExperience, setEditExperience] = useState(0)
-  const [editSkillsRaw, setEditSkillsRaw] = useState('')
+  const [editSkills, setEditSkills] = useState<{ category: string; skills: string }[]>([])
   const [editWorkExps, setEditWorkExps] = useState<WorkExpEdit[]>([])
-  const [editProjects, setEditProjects] = useState<ProjectEdit[]>([])
   const [editCertifications, setEditCertifications] = useState<string[]>([])
   const [editAchievements, setEditAchievements] = useState<string[]>([])
 
@@ -293,57 +275,22 @@ export default function EmployeeDashboard() {
     const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s
   })
 
-  const blankProject = (): ProjectEdit => ({ name: '', description: '', technologies: '', role: '', duration: '' })
-
-  const updateProject = (idx: number, field: keyof ProjectEdit, value: string) =>
-    setEditProjects(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p))
-
-  const toProjectEdits = (projects: StandaloneProject[]): ProjectEdit[] =>
-    projects.map(p => ({
-      name: p.name || '',
-      description: p.description || '',
-      technologies: p.technologies?.join(', ') || '',
-      role: p.role || '',
-      duration: p.duration || '',
-    }))
-
-  const fromProjectEdits = (edits: ProjectEdit[]): StandaloneProject[] =>
-    edits.filter(p => p.name.trim()).map(p => ({
-      name: p.name.trim(),
-      description: p.description.trim() || undefined,
-      technologies: p.technologies.split(',').map(s => s.trim()).filter(Boolean),
-      role: p.role.trim() || undefined,
-      duration: p.duration.trim() || undefined,
-    }))
-
   const startEdit = () => {
     const r = profile?.resume
     setEditSummary(r?.profile_summary || '')
     setEditExperience(r?.total_experience || 0)
-    setEditSkillsRaw(
+    setEditSkills(
       r?.technical_skills
-        ? Object.entries(r.technical_skills).map(([k, v]) => `${k}: ${v.join(', ')}`).join('\n')
-        : ''
+        ? Object.entries(r.technical_skills).map(([cat, skills]) => ({ category: cat, skills: skills.join(', ') }))
+        : [{ category: '', skills: '' }]
     )
     setEditWorkExps(r?.work_experience ? toWorkExpEdits(r.work_experience) : [blankWorkExp()])
-    setEditProjects(r?.projects ? toProjectEdits(r.projects) : [])
     setEditCertifications(r?.certifications ?? [])
     setEditAchievements(r?.achievements ?? [])
     setEditOpenEntries(new Set())
     setEditOpenProjects(new Set())
     setEditMode(true)
     setSaveMsg('')
-  }
-
-  const parseSkills = (raw: string): Record<string, string[]> => {
-    const result: Record<string, string[]> = {}
-    raw.split('\n').forEach(line => {
-      const [cat, ...rest] = line.split(':')
-      if (cat && rest.length) {
-        result[cat.trim()] = rest.join(':').split(',').map(s => s.trim()).filter(Boolean)
-      }
-    })
-    return result
   }
 
   const handleSave = async () => {
@@ -354,10 +301,13 @@ export default function EmployeeDashboard() {
         email: user!.email,
         profile_summary: editSummary,
         total_experience: editExperience,
-        technical_skills: parseSkills(editSkillsRaw),
+        technical_skills: Object.fromEntries(
+          editSkills
+            .filter(s => s.category.trim())
+            .map(s => [s.category.trim(), s.skills.split(',').map(x => x.trim()).filter(Boolean)])
+        ),
         personal_info: profile?.resume?.personal_info,
         work_experience: fromWorkExpEdits(editWorkExps),
-        projects: fromProjectEdits(editProjects),
         certifications: editCertifications.map(s => s.trim()).filter(Boolean),
         achievements: editAchievements.map(s => s.trim()).filter(Boolean),
       })
@@ -505,47 +455,76 @@ export default function EmployeeDashboard() {
 
                 <div className="space-y-5">
                   {/* Profile Summary */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Profile Summary</label>
+                  <div className="bg-blue-50/50 rounded-xl p-4">
+                    <label className="block text-sm font-semibold text-blue-700 mb-2">Profile Summary</label>
                     <textarea
                       value={editSummary}
                       onChange={e => setEditSummary(e.target.value)}
                       rows={4}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm resize-none"
+                      className="w-full px-4 py-3 rounded-xl border border-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-800 text-sm resize-none bg-white"
                     />
                   </div>
 
                   {/* Total Experience */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Total Experience (years)</label>
+                  <div className="bg-amber-50/50 rounded-xl p-4">
+                    <label className="block text-sm font-semibold text-amber-700 mb-2">Total Experience (years)</label>
                     <input
                       type="number" min={0} value={editExperience}
                       onChange={e => setEditExperience(Number(e.target.value))}
-                      className="w-32 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                      className="w-32 px-4 py-3 rounded-xl border border-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent text-gray-800 text-sm bg-white"
                     />
                   </div>
 
                   {/* Technical Skills */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Technical Skills</label>
-                    <p className="text-xs text-gray-400 mb-2">Format: category: skill1, skill2, skill3 (one per line)</p>
-                    <textarea
-                      value={editSkillsRaw}
-                      onChange={e => setEditSkillsRaw(e.target.value)}
-                      rows={5}
-                      placeholder={'backend: Python, FastAPI, Node.js\nfrontend: React, TypeScript\ncloud: AWS, Docker'}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm font-mono resize-none"
-                    />
+                  <div className="bg-violet-50/50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-semibold text-violet-700">Technical Skills</label>
+                      <button
+                        type="button"
+                        onClick={() => setEditSkills(prev => [...prev, { category: '', skills: '' }])}
+                        className="text-xs text-violet-600 hover:text-violet-700 border border-violet-300 hover:border-violet-400 bg-white px-3 py-1 rounded-lg transition font-medium"
+                      >
+                        + Add Entry
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {editSkills.map((skill, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={skill.category}
+                            onChange={e => setEditSkills(prev => prev.map((s, i) => i === idx ? { ...s, category: e.target.value } : s))}
+                            placeholder="Category (e.g. Backend)"
+                            className="w-36 px-3 py-2 rounded-lg border border-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent text-gray-800 text-sm bg-white"
+                          />
+                          <input
+                            type="text"
+                            value={skill.skills}
+                            onChange={e => setEditSkills(prev => prev.map((s, i) => i === idx ? { ...s, skills: e.target.value } : s))}
+                            placeholder="Skills, comma separated (e.g. Python, FastAPI)"
+                            className="flex-1 px-3 py-2 rounded-lg border border-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent text-gray-800 text-sm bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditSkills(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-400 hover:text-red-600 text-sm transition px-2 flex-shrink-0"
+                          >✕</button>
+                        </div>
+                      ))}
+                      {editSkills.length === 0 && (
+                        <p className="text-xs text-violet-400 italic">No skills added. Click "+ Add Entry" to add one.</p>
+                      )}
+                    </div>
                   </div>
 
                   {/* ── Work Experience Accordion (Edit) ── */}
-                  <div>
+                  <div className="bg-green-50/50 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <label className="block text-sm font-medium text-gray-700">Work Experience</label>
+                      <label className="block text-sm font-semibold text-green-700">Work Experience</label>
                       <button
                         type="button"
                         onClick={addEntry}
-                        className="text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-lg transition"
+                        className="text-xs text-green-600 hover:text-green-700 border border-green-300 hover:border-green-400 bg-white px-3 py-1 rounded-lg transition font-medium"
                       >
                         + Add Entry
                       </button>
@@ -553,9 +532,9 @@ export default function EmployeeDashboard() {
 
                     <div className="space-y-2">
                       {editWorkExps.map((we, idx) => (
-                        <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div key={idx} className="border border-green-100 rounded-xl overflow-hidden bg-white">
                           {/* Entry header */}
-                          <div className="flex items-center gap-2 px-4 py-3 bg-gray-50">
+                          <div className="flex items-center gap-2 px-4 py-3 bg-green-50/60">
                             <button
                               type="button"
                               onClick={() => toggleEditEntry(idx)}
@@ -586,14 +565,14 @@ export default function EmployeeDashboard() {
 
                           {/* Entry body */}
                           {editOpenEntries.has(idx) && (
-                            <div className="p-4 space-y-3 border-t border-gray-100">
+                            <div className="p-4 space-y-3 border-t border-green-50">
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                   <label className="block text-xs font-medium text-gray-500 mb-1">Role / Designation</label>
                                   <input type="text" value={we.designation}
                                     onChange={e => updateWorkExp(idx, 'designation', e.target.value)}
                                     placeholder="e.g. Backend Developer"
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                   />
                                 </div>
                                 <div>
@@ -601,7 +580,7 @@ export default function EmployeeDashboard() {
                                   <input type="text" value={we.company}
                                     onChange={e => updateWorkExp(idx, 'company', e.target.value)}
                                     placeholder="e.g. TechNova Solutions"
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                   />
                                 </div>
                                 <div>
@@ -609,7 +588,7 @@ export default function EmployeeDashboard() {
                                   <input type="text" value={we.duration}
                                     onChange={e => updateWorkExp(idx, 'duration', e.target.value)}
                                     placeholder="e.g. Jan 2022 – Present"
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                   />
                                 </div>
                                 <div>
@@ -617,7 +596,7 @@ export default function EmployeeDashboard() {
                                   <input type="text" value={we.companyDescription}
                                     onChange={e => updateWorkExp(idx, 'companyDescription', e.target.value)}
                                     placeholder="e.g. Product startup in fintech"
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                    className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                   />
                                 </div>
                               </div>
@@ -629,7 +608,7 @@ export default function EmployeeDashboard() {
                                   <button
                                     type="button"
                                     onClick={() => addProjectToEntry(idx)}
-                                    className="text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 px-2.5 py-0.5 rounded-lg transition"
+                                    className="text-xs text-green-600 hover:text-green-700 border border-green-200 hover:border-green-300 px-2.5 py-0.5 rounded-lg transition"
                                   >
                                     + Add Project
                                   </button>
@@ -642,9 +621,9 @@ export default function EmployeeDashboard() {
                                   {we.projects.map((proj, pIdx) => {
                                     const key = `${idx}-${pIdx}`
                                     return (
-                                      <div key={pIdx} className="border border-gray-200 rounded-lg overflow-hidden">
+                                      <div key={pIdx} className="border border-green-100 rounded-lg overflow-hidden">
                                         {/* Project header */}
-                                        <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50/70">
+                                        <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50/40">
                                           <button
                                             type="button"
                                             onClick={() => toggleEditProject(key)}
@@ -671,14 +650,14 @@ export default function EmployeeDashboard() {
 
                                         {/* Project form */}
                                         {editOpenProjects.has(key) && (
-                                          <div className="p-3 space-y-2.5 border-t border-gray-100">
+                                          <div className="p-3 space-y-2.5 border-t border-green-50">
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                               <div>
                                                 <label className="block text-xs font-medium text-gray-500 mb-1">Project Name</label>
                                                 <input type="text" value={proj.name}
                                                   onChange={e => updateProjectInEntry(idx, pIdx, 'name', e.target.value)}
                                                   placeholder="e.g. Retail AI Platform"
-                                                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                                  className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                                 />
                                               </div>
                                               <div>
@@ -686,7 +665,7 @@ export default function EmployeeDashboard() {
                                                 <input type="text" value={proj.client}
                                                   onChange={e => updateProjectInEntry(idx, pIdx, 'client', e.target.value)}
                                                   placeholder="e.g. Internal / Acme Corp"
-                                                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                                  className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                                 />
                                               </div>
                                               <div>
@@ -694,7 +673,7 @@ export default function EmployeeDashboard() {
                                                 <input type="text" value={proj.role}
                                                   onChange={e => updateProjectInEntry(idx, pIdx, 'role', e.target.value)}
                                                   placeholder="e.g. Backend Developer"
-                                                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                                  className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                                 />
                                               </div>
                                               <div>
@@ -702,7 +681,7 @@ export default function EmployeeDashboard() {
                                                 <input type="text" value={proj.technologies}
                                                   onChange={e => updateProjectInEntry(idx, pIdx, 'technologies', e.target.value)}
                                                   placeholder="e.g. Python, FastAPI, MongoDB"
-                                                  className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                                                  className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm"
                                                 />
                                               </div>
                                             </div>
@@ -711,7 +690,7 @@ export default function EmployeeDashboard() {
                                               <textarea value={proj.description}
                                                 onChange={e => updateProjectInEntry(idx, pIdx, 'description', e.target.value)}
                                                 rows={2} placeholder="Brief description of the project..."
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm resize-none"
+                                                className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm resize-none"
                                               />
                                             </div>
                                             <div>
@@ -719,7 +698,7 @@ export default function EmployeeDashboard() {
                                               <textarea value={proj.responsibilities}
                                                 onChange={e => updateProjectInEntry(idx, pIdx, 'responsibilities', e.target.value)}
                                                 rows={3} placeholder="One responsibility per line..."
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm resize-none"
+                                                className="w-full px-3 py-2 rounded-lg border border-green-100 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent text-gray-800 text-sm resize-none"
                                               />
                                               <p className="text-xs text-gray-400 mt-1">One per line</p>
                                             </div>
@@ -737,89 +716,14 @@ export default function EmployeeDashboard() {
                     </div>
                   </div>
 
-                  {/* Standalone Projects */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="block text-sm font-medium text-gray-700">Projects</label>
-                      <button
-                        type="button"
-                        onClick={() => setEditProjects(prev => [...prev, blankProject()])}
-                        className="text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-lg transition"
-                      >
-                        + Add Project
-                      </button>
-                    </div>
-                    <div className="space-y-4">
-                      {editProjects.map((proj, idx) => (
-                        <div key={idx} className="border border-gray-200 rounded-xl p-4 space-y-3 relative">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Project {idx + 1}</span>
-                            <button
-                              type="button"
-                              onClick={() => setEditProjects(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-red-400 hover:text-red-600 text-xs transition"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Project Name</label>
-                              <input type="text" value={proj.name}
-                                onChange={e => updateProject(idx, 'name', e.target.value)}
-                                placeholder="e.g. E-Commerce Platform"
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Role</label>
-                              <input type="text" value={proj.role}
-                                onChange={e => updateProject(idx, 'role', e.target.value)}
-                                placeholder="e.g. Lead Developer"
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Duration</label>
-                              <input type="text" value={proj.duration}
-                                onChange={e => updateProject(idx, 'duration', e.target.value)}
-                                placeholder="e.g. Jan 2023 – Mar 2023"
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Technologies</label>
-                              <input type="text" value={proj.technologies}
-                                onChange={e => updateProject(idx, 'technologies', e.target.value)}
-                                placeholder="e.g. React, Node.js, MongoDB"
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
-                            <textarea value={proj.description}
-                              onChange={e => updateProject(idx, 'description', e.target.value)}
-                              rows={2} placeholder="Brief description of the project..."
-                              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm resize-none"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                      {editProjects.length === 0 && (
-                        <p className="text-xs text-gray-400 italic">No projects added yet. Click "+ Add Project" to add one.</p>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Certifications */}
-                  <div>
+                  <div className="bg-teal-50/50 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <label className="block text-sm font-medium text-gray-700">Certifications</label>
+                      <label className="block text-sm font-semibold text-teal-700">Certifications</label>
                       <button
                         type="button"
                         onClick={() => setEditCertifications(prev => [...prev, ''])}
-                        className="text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-lg transition"
+                        className="text-xs text-teal-600 hover:text-teal-700 border border-teal-300 hover:border-teal-400 bg-white px-3 py-1 rounded-lg transition font-medium"
                       >
                         + Add
                       </button>
@@ -830,28 +734,28 @@ export default function EmployeeDashboard() {
                           <input type="text" value={cert}
                             onChange={e => setEditCertifications(prev => prev.map((c, i) => i === idx ? e.target.value : c))}
                             placeholder="e.g. AWS Certified Solutions Architect"
-                            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                            className="flex-1 px-3 py-2 rounded-lg border border-teal-100 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent text-gray-800 text-sm bg-white"
                           />
                           <button type="button"
                             onClick={() => setEditCertifications(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-red-400 hover:text-red-600 text-xs transition px-2"
+                            className="text-red-400 hover:text-red-600 text-sm transition px-2"
                           >✕</button>
                         </div>
                       ))}
                       {editCertifications.length === 0 && (
-                        <p className="text-xs text-gray-400 italic">No certifications added.</p>
+                        <p className="text-xs text-teal-400 italic">No certifications added.</p>
                       )}
                     </div>
                   </div>
 
                   {/* Achievements */}
-                  <div>
+                  <div className="bg-orange-50/50 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <label className="block text-sm font-medium text-gray-700">Achievements</label>
+                      <label className="block text-sm font-semibold text-orange-700">Achievements</label>
                       <button
                         type="button"
                         onClick={() => setEditAchievements(prev => [...prev, ''])}
-                        className="text-xs text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-lg transition"
+                        className="text-xs text-orange-600 hover:text-orange-700 border border-orange-300 hover:border-orange-400 bg-white px-3 py-1 rounded-lg transition font-medium"
                       >
                         + Add
                       </button>
@@ -862,16 +766,16 @@ export default function EmployeeDashboard() {
                           <input type="text" value={ach}
                             onChange={e => setEditAchievements(prev => prev.map((a, i) => i === idx ? e.target.value : a))}
                             placeholder="e.g. Employee of the Quarter"
-                            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 text-sm"
+                            className="flex-1 px-3 py-2 rounded-lg border border-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-gray-800 text-sm bg-white"
                           />
                           <button type="button"
                             onClick={() => setEditAchievements(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-red-400 hover:text-red-600 text-xs transition px-2"
+                            className="text-red-400 hover:text-red-600 text-sm transition px-2"
                           >✕</button>
                         </div>
                       ))}
                       {editAchievements.length === 0 && (
-                        <p className="text-xs text-gray-400 italic">No achievements added.</p>
+                        <p className="text-xs text-orange-400 italic">No achievements added.</p>
                       )}
                     </div>
                   </div>
@@ -1090,48 +994,6 @@ export default function EmployeeDashboard() {
                         ))}
                       </div>
                     )}
-                  </div>
-                )}
-
-                {/* Standalone Projects */}
-                {resume?.projects && resume.projects.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Projects</h3>
-                    <div className="space-y-5">
-                      {resume.projects.map((proj, i) => (
-                        <div key={i} className="flex items-start gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                            <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-                            </svg>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="font-medium text-gray-800 text-sm">{proj.name}</p>
-                                {proj.role && <p className="text-gray-500 text-xs mt-0.5">{proj.role}</p>}
-                              </div>
-                              {proj.duration && (
-                                <span className="text-xs text-gray-400 whitespace-nowrap">{proj.duration}</span>
-                              )}
-                            </div>
-                            {proj.description && (
-                              <p className="text-gray-600 text-xs mt-1 leading-relaxed">{proj.description}</p>
-                            )}
-                            {proj.technologies && proj.technologies.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-2">
-                                {proj.technologies.map((tech, j) => (
-                                  <span key={j} className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-full font-medium">
-                                    {tech}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
 
