@@ -12,7 +12,7 @@ import json
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = os.getenv("MONGO_DB_NAME", "employee_registry")
+DB_NAME = os.getenv("MONGO_DB_NAME", "resume_sync_db")
 
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
@@ -265,14 +265,16 @@ def search_employees_and_get_resume_paths(
     for emp_id in employee_ids:
         info = employee_info.get(emp_id, {})
         rdata = resume_data.get(emp_id, {})
-        results.append({
-            "employee_id": emp_id,
-            "name": info.get("fullName", ""),
-            "email": info.get("email", ""),
-            "resume_path": resume_paths.get(emp_id, ""),
-            "skills": rdata.get("search_tags", []),
-            "experience": rdata.get("total_experience", 0),
-        })
+        results.append(
+            {
+                "employee_id": emp_id,
+                "name": info.get("fullName", ""),
+                "email": info.get("email", ""),
+                "resume_path": resume_paths.get(emp_id, ""),
+                "skills": rdata.get("search_tags", []),
+                "experience": rdata.get("total_experience", 0),
+            }
+        )
 
     return json.dumps({"status": "success", "count": len(results), "data": results})
 
