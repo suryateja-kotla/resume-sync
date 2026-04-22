@@ -1,9 +1,10 @@
 import logging
+import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 
 MONGO_URI = "mongodb://localhost:27017"
-DB_NAME = "employee_registry_local"
+DB_NAME = os.getenv("MONGO_DB_NAME", "employee_registry")
 logger = logging.getLogger(__name__)
 
 

@@ -3,7 +3,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = "employee_registry_local"
+DB_NAME = os.getenv("MONGO_DB_NAME", "employee_registry")
 
 _client = AsyncIOMotorClient(MONGO_URI)
 db = _client[DB_NAME]

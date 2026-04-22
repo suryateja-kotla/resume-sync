@@ -10,7 +10,6 @@ from services.db_service import (
     search_candidates_by_query,
 )
 from schemas.schemas import (
-    SearchRequest,
     LoginRequest,
     LoginResponse,
     CandidateSearchRequest,

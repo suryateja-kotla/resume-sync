@@ -5,7 +5,7 @@ from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
 from mcp import StdioServerParameters
 
 _MCP_SERVER_SCRIPT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "mcp_server", "mongo_mcp_server.py")
+    os.path.join(os.path.dirname(__file__), "..", "mongo_mcp", "mongo_mcp_server.py")
 )
 
 
