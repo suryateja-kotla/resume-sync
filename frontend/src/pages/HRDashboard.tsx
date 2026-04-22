@@ -22,9 +22,21 @@ interface Message {
 }
 
 function CandidateCard({ candidate }: { candidate: Candidate }) {
+  const palettes: { tag: string; glow: string }[] = [
+    { tag: 'bg-blue-100 text-blue-700',    glow: 'shadow-[0_0_8px_2px_rgba(59,130,246,0.35)]'  },
+    { tag: 'bg-violet-100 text-violet-700', glow: 'shadow-[0_0_8px_2px_rgba(139,92,246,0.35)]' },
+    { tag: 'bg-emerald-100 text-emerald-700', glow: 'shadow-[0_0_8px_2px_rgba(16,185,129,0.35)]' },
+    { tag: 'bg-amber-100 text-amber-700',   glow: 'shadow-[0_0_8px_2px_rgba(245,158,11,0.35)]'  },
+    { tag: 'bg-rose-100 text-rose-700',     glow: 'shadow-[0_0_8px_2px_rgba(244,63,94,0.35)]'   },
+    { tag: 'bg-teal-100 text-teal-700',     glow: 'shadow-[0_0_8px_2px_rgba(20,184,166,0.35)]'  },
+  ]
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
-      <div className="flex items-start justify-between mb-3">
+    <div className="relative bg-white rounded-xl p-4 border border-blue-100 shadow-[0_0_16px_4px_rgba(59,130,246,0.12)] hover:shadow-[0_0_24px_6px_rgba(59,130,246,0.22)] transition-shadow duration-300">
+      {/* subtle gradient background */}
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-50/60 via-white to-violet-50/40 pointer-events-none" />
+
+      <div className="relative flex items-start justify-between mb-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-gray-800 truncate">{candidate.name || candidate.employee_id}</h3>
           <a href={`mailto:${candidate.email}`} className="text-blue-500 text-sm hover:underline">
@@ -32,17 +44,20 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
           </a>
           <p className="text-gray-400 text-xs mt-0.5">ID: {candidate.employee_id}</p>
         </div>
-        <span className="bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ml-2">
+        <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(59,130,246,0.3)]">
           {candidate.experience} yr{candidate.experience !== 1 ? 's' : ''}
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {candidate.skills.slice(0, 6).map((skill, i) => (
-          <span key={i} className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
-            {skill}
-          </span>
-        ))}
+      <div className="relative flex flex-wrap gap-1.5">
+        {candidate.skills.slice(0, 6).map((skill, i) => {
+          const p = palettes[i % palettes.length]
+          return (
+            <span key={i} className={`${p.tag} ${p.glow} text-xs px-2.5 py-0.5 rounded-full font-medium`}>
+              {skill}
+            </span>
+          )
+        })}
         {candidate.skills.length > 6 && (
           <span className="text-gray-400 text-xs px-1 py-0.5">+{candidate.skills.length - 6} more</span>
         )}
