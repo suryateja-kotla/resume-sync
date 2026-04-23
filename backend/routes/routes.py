@@ -23,6 +23,7 @@ from schemas.schemas import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 @router.get("/health")
 async def health_check():
     return {"status": "ok"}
@@ -86,8 +87,14 @@ async def update_employee_profile(request: ProfileUpdateRequest):
         updated["interests"] = request.interests
     if request.work_experience is not None:
         updated["work_experience"] = request.work_experience
-    logger.info(f"Updating profile for employee_id={employee_id} with data: {updated.get('work_experience', {})}")
-    payload = EmployeePayload(**updated)
+    logger.info(f"Updating profile for employee_id={employee_id} with data: {updated}")
+
+    try:
+        payload = EmployeePayload(**updated)
+    except Exception as e:
+        logger.error(f"Failed to create EmployeePayload for {employee_id}: {str(e)}")
+        return {"status": "error", "message": f"Invalid payload: {str(e)}"}
+
     save_result = await save_employee_resume_data(employee_id, payload.model_dump())
     if save_result.get("status") != "success":
         logger.error(f"Failed to save resume data for {employee_id}: {save_result}")

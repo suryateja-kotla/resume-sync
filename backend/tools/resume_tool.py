@@ -104,8 +104,13 @@ async def extract_resume(
 
         extracted = json.loads(raw_text)
         extracted["employee_id"] = employee_id
-
-        payload = EmployeePayload(**extracted)
+        try:
+            payload = EmployeePayload(**extracted)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to create EmployeePayload: {str(e)}",
+            }
         await save_employee_resume_data(
             employee_id,
             payload.model_dump(),

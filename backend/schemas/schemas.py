@@ -14,11 +14,11 @@ class Company(BaseModel):
 
 
 class Project(BaseModel):
-    name: Optional[str] = ""
+    name: Optional[str] = None
     client: Optional[str] = "Internal"
-    role: Optional[str] = ""
+    role: Optional[str] = None
     environment: List[str] = Field(default_factory=list)
-    project_description: Optional[str] = ""
+    project_description: Optional[str] = None
     responsibilities: List[str] = Field(default_factory=list)
 
 
