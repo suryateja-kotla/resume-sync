@@ -89,7 +89,7 @@ async def upsert_employee_data(
         }
 
     except PyMongoError as e:
-        logger.error(f"save_employee_resume_data error for {employee_id}: {e}")
+        logger.error(f"upsert_employee_data error for {employee_id}: {e}")
         return {"status": "error", "message": str(e)}
 
 
