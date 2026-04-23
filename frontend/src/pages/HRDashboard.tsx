@@ -10,6 +10,7 @@ interface Candidate {
   skills: string[]
   experience: number
   resume_path?: string
+  is_on_bench?: boolean
 }
 
 interface Message {
@@ -47,6 +48,11 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
         <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(59,130,246,0.3)]">
           {candidate.experience} yr{candidate.experience !== 1 ? 's' : ''}
         </span>
+        {candidate.is_on_bench && (
+            <span className="bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(16,185,129,0.3)]">
+              On Bench
+            </span>
+          )}
       </div>
 
       <div className="relative flex flex-wrap gap-1.5">
@@ -104,15 +110,20 @@ export default function HRDashboard() {
       const { data } = await api.post('/search-candidates', { query })
       const candidates: Candidate[] = data.candidates || []
       const excel_filename: string | undefined = data.excel_filename || undefined
+      const custom_message: string | undefined = data.message // <-- ADDED
+
       setMessages(prev =>
         prev.map(m =>
           m.id === loadingMsg.id
             ? {
                 ...m,
                 loading: false,
-                text: candidates.length === 0
-                  ? 'No candidates found matching your query. Try different skills or experience range.'
-                  : `Found ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}:`,
+                // Check if the agent sent a custom message (like "Successfully updated bench status")
+                text: custom_message 
+                    ? custom_message 
+                    : (candidates.length === 0
+                        ? 'No candidates found matching your query. Try different skills or experience range.'
+                        : `Found ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}:`),
                 candidates: candidates.length > 0 ? candidates : undefined,
                 excel_filename: candidates.length > 0 ? excel_filename : undefined,
               }

@@ -73,26 +73,26 @@ async def log_audit_event(
 
 
 async def search_employees(
-    skills: List[str], min_experience: int, max_experience: Optional[int] = None
+    skills: List[str], min_experience: int, max_experience: Optional[int] = None, is_on_bench: Optional[bool] = None
 ) -> Dict[str, Any]:
     try:
-        skill_queries = [
-            {"search_tags": {"$regex": s, "$options": "i"}} for s in skills
-        ]
-
+        and_conditions = []
+        
+        if skills:
+            skill_queries = [{"search_tags": {"$regex": s, "$options": "i"}} for s in skills]
+            and_conditions.append({"$or": skill_queries})
+        
         experience_filter = {"$gte": min_experience}
         if max_experience is not None:
             experience_filter["$lte"] = max_experience
-
-        query = {
-            "$and": [
-                {"total_experience": experience_filter},
-                {"$or": skill_queries},
-            ]
-        }
+        and_conditions.append({"total_experience": experience_filter})
+        
+        if is_on_bench is not None:
+            and_conditions.append({"is_on_bench": is_on_bench})
+            
+        query = {"$and": and_conditions} if and_conditions else {}
 
         cursor = col_employee_resume_data.find(query, {"_id": 0, "employee_id": 1})
-
         employees = await cursor.to_list(length=None)
         employee_ids = [emp["employee_id"] for emp in employees]
 
@@ -102,23 +102,16 @@ async def search_employees(
         return {"status": "error", "message": str(e)}
 
 
-async def get_resume_paths(employee_ids: List[str]) -> List[Dict[str, Any]]:
-    cursor = col_resume_store.find(
-        {"employee_id": {"$in": employee_ids}},
-        {"_id": 0, "employee_id": 1, "resume_path": 1},
-    )
-    return await cursor.to_list(length=None)
-
 
 @mcp.tool
 async def search_employees_and_get_resume_paths(
-    skills: List[str], min_experience: int, max_experience: Optional[int] = None
+    skills: List[str], min_experience: int, max_experience: Optional[int] = None , is_on_bench: Optional[bool] = None
 ) -> str:
     """
     Search employees and return enriched results.
     """
+    search_result = await search_employees(skills, min_experience, max_experience, is_on_bench)
 
-    search_result = await search_employees(skills, min_experience, max_experience)
 
     if search_result.get("status") != "success":
         return json.dumps({"status": "error", "message": "Employee search failed"})
@@ -163,6 +156,7 @@ async def search_employees_and_get_resume_paths(
                 "resume_path": resume_paths.get(emp_id, ""),
                 "skills": rdata.get("search_tags", []),
                 "experience": rdata.get("total_experience", 0),
+                "is_on_bench": rdata.get("is_on_bench", False),
             }
         )
 
@@ -193,6 +187,36 @@ async def get_resume_path_by_id(employee_id: str):
 
     return {"status": "success", "data": doc}
 
+@mcp.tool
+async def update_bench_status(emails: List[str], is_on_bench: bool) -> str:
+    """Update the bench status for a list of employee emails."""
+    try:
+        # Find employees by email to get their IDs
+        cursor = col_employee_data.find({"email": {"$in": emails}}, {"_id": 0, "employeeId": 1, "email": 1})
+        employees = await cursor.to_list(length=None)
+        
+        if not employees:
+            return json.dumps({"status": "error", "message": "No matching employees found for the provided emails."})
+        
+        employee_ids = [emp["employeeId"] for emp in employees]
+        
+        # Update both collections to keep search fast
+        await col_employee_data.update_many(
+            {"employeeId": {"$in": employee_ids}},
+            {"$set": {"is_on_bench": is_on_bench}}
+        )
+        await col_employee_resume_data.update_many(
+            {"employee_id": {"$in": employee_ids}},
+            {"$set": {"is_on_bench": is_on_bench}}
+        )
+        
+        found_emails = [emp["email"] for emp in employees]
+        return json.dumps({
+            "status": "success", 
+            "message": f"Successfully updated bench status to {is_on_bench} for {len(found_emails)} employees."
+        })
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
 
 if __name__ == "__main__":
     mcp.run()

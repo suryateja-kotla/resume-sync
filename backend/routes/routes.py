@@ -136,6 +136,7 @@ async def search_candidates(request: CandidateSearchRequest):
         "status": reply.get("status", "error"),
         "count": reply.get("count", 0),
         "candidates": reply.get("candidates", []),
+        "message": reply.get("message"),
         "excel_filename": excel_filename,
     }
 
@@ -183,3 +184,5 @@ async def upload_resume(
     finally:
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
+
+
