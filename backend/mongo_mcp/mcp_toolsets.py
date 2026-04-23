@@ -18,7 +18,7 @@ def get_query_agent_toolset():
             ),
             timeout=120,
         ),
-        tool_filter=["search_employees_and_get_resume_paths","update_bench_status"],
+        tool_filter=["execute_mongo_query", "execute_mongo_update"],
     )
 
 

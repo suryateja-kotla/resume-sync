@@ -7,10 +7,11 @@ interface Candidate {
   employee_id: string
   name: string
   email: string
+  currentRole: string
   skills: string[]
   experience: number
   resume_path?: string
-  is_on_bench?: boolean
+  isOnBench?: boolean
 }
 
 interface Message {
@@ -46,16 +47,16 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
           <p className="text-gray-400 text-xs mt-0.5">ID: {candidate.employee_id}</p>
         </div>
         <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(59,130,246,0.3)]">
-          {candidate.experience} yr{candidate.experience !== 1 ? 's' : ''}
+          {candidate.currentRole}
         </span>
-        {candidate.is_on_bench && (
+        {candidate.isOnBench && (
             <span className="bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(16,185,129,0.3)]">
               On Bench
             </span>
           )}
       </div>
 
-      <div className="relative flex flex-wrap gap-1.5">
+      {/* <div className="relative flex flex-wrap gap-1.5">
         {candidate.skills.slice(0, 6).map((skill, i) => {
           const p = palettes[i % palettes.length]
           return (
@@ -67,7 +68,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
         {candidate.skills.length > 6 && (
           <span className="text-gray-400 text-xs px-1 py-0.5">+{candidate.skills.length - 6} more</span>
         )}
-      </div>
+      </div> */}
     </div>
   )
 }

@@ -59,7 +59,7 @@ async def seed_database():
                         "department": {"bsonType": "string"},
                         "status": {"enum": ["Active", "Inactive", "On Leave"]},
                         "role": {"enum": ["HR", "EMPLOYEE"]},
-                        "on_bench": {"bsonType": "bool"},
+                        "isOnBench": {"bsonType": "bool"},
                         "lastProfileUpdate": {"bsonType": "date"},
                     },
                 }
@@ -83,7 +83,6 @@ async def seed_database():
                     ],
                     "properties": {
                         "employee_id": {"bsonType": "string"},
-                        "on_bench": {"bsonType": "bool"},
                         "total_experience": {
                             "bsonType": "int",
                             "description": "Total years of experience",
@@ -218,7 +217,7 @@ async def seed_database():
                 "department": "Human Resources",
                 "status": "Active",
                 "role": "HR",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -233,7 +232,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -247,7 +246,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -261,7 +260,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -275,7 +274,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -289,7 +288,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -303,7 +302,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -317,7 +316,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -331,7 +330,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -345,7 +344,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -358,7 +357,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -372,10 +371,53 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
-                "is_on_bench": False,
+                "isOnBench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
+
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP012",
+                "fullName": "Madhuri Taddi",
+                "email": "madhuri.taddi@sailssoftware.com",
+                "currentRole": "Software Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "isOnBench": False,
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP013",
+                "fullName": "Siva Sai Manikanta",
+                "email": "sivasai@sailssoftware.com",
+                "currentRole": "Software Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "isOnBench": False,
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP014",
+                "fullName": "Jayasree Maddi",
+                "email": "jayasree.maddi@sailssoftware.com",
+                "currentRole": "Technical Delivery Manager",
+                "department": "Delivery",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "isOnBench": False,
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+
         logger.info("Seed data inserted successfully.")
     else:
         logger.info("Seed data already exists, skipping...")

@@ -69,7 +69,7 @@ class EmployeeDataDocument(BaseModel):
     currentRole: Optional[str] = None
     department: Optional[str] = None
     status: str = "Active"
-    is_on_bench: bool = False
+    isOnBench: bool = False
     lastProfileUpdate: Optional[datetime] = None
 
 
@@ -126,7 +126,8 @@ class CandidateResult(BaseModel):
     skills: List[str]
     experience: int
     email: str
-    is_on_bench: bool = False
+    isOnBench: bool = False
+
 
 # Employee profile
 class ProfileUpdateRequest(BaseModel):
