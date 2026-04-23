@@ -57,7 +57,6 @@ def _extract_search_tags(skills: Dict[str, Any]) -> list:
 
 async def upsert_employee_data(
     employee_id: str,
-    full_name: Optional[str] = None,
     current_role: Optional[str] = None,
     department: Optional[str] = None,
     status: str = "Active",
@@ -68,15 +67,10 @@ async def upsert_employee_data(
             "status": status,
             "lastProfileUpdate": datetime.now(timezone.utc),
         }
-        # include fullName only when provided to avoid writing null
-        if full_name is not None:
-            update_fields["fullName"] = full_name
         if current_role:
             update_fields["currentRole"] = current_role
         if department:
             update_fields["department"] = department
-
-        logger.debug(f"upsert_employee_data preparing update for {employee_id}: full_name={full_name!r}")
         logger.debug(f"upsert_employee_data update_fields: {update_fields}")
 
         result = await col_employee_data.update_one(
@@ -84,7 +78,6 @@ async def upsert_employee_data(
             {"$set": update_fields},
             upsert=True,
         )
-
         return {
             "status": "success",
             "data": {
@@ -101,7 +94,6 @@ async def upsert_employee_data(
 async def save_employee_resume_data(
     employee_id: str,
     resume_data: Dict[str, Any],
-    full_name: Optional[str] = None,
     current_role: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:
@@ -120,7 +112,7 @@ async def save_employee_resume_data(
             {"$set": doc},
             upsert=True,
         )
-        await upsert_employee_data(employee_id, full_name, current_role)
+        await upsert_employee_data(employee_id, current_role)
         return {
             "status": "success",
             "data": {
