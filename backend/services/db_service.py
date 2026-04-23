@@ -90,7 +90,10 @@ async def upsert_employee_data(
 
 
 async def save_employee_resume_data(
-    employee_id: str, resume_data: Dict[str, Any]
+    employee_id: str,
+    resume_data: Dict[str, Any],
+    full_name: Optional[str] = None,
+    current_role: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:
         skills = resume_data.get("technical_skills", {})
@@ -108,7 +111,7 @@ async def save_employee_resume_data(
             {"$set": doc},
             upsert=True,
         )
-
+        await upsert_employee_data(employee_id, full_name, current_role)
         return {
             "status": "success",
             "data": {

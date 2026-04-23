@@ -106,7 +106,12 @@ async def extract_resume(
         extracted["employee_id"] = employee_id
 
         payload = EmployeePayload(**extracted)
-        await save_employee_resume_data(employee_id, payload.model_dump())
+        await save_employee_resume_data(
+            employee_id,
+            payload.model_dump(),
+            payload.personal_info.full_name if payload.personal_info else None,
+            payload.work_experience[0].designation if payload.work_experience else None,
+        )
 
         return {
             "message": "Resume extracted and saved successfully.",

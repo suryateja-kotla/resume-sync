@@ -31,5 +31,7 @@ Rules:
 - total_experience must be an integer
 - cgpa must be a float
 - All arrays must be arrays even if empty: []
+- Sort "work_experience" in descending order based on duration (latest experience first)
+- If dates are present, use end date to determine recency (ongoing roles should come first)
 - Return ONLY the JSON object, nothing else
 """
