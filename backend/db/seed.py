@@ -234,6 +234,136 @@ async def seed_database():
             }
         )
 
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP002",
+                "fullName": "Pavan Kumar",
+                "email": "pavankumar.yele@sailssoftware.com",
+                "currentRole": "senior Qa Automation Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP003",
+                "fullName": "Sai Spandana",
+                "email": "saispandana.Komati@sailssoftware.com",
+                "currentRole": "Senior QA Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP004",
+                "fullName": "karthik kumar",
+                "email": "karthikkumar.Malapati@sailssoftware.com",
+                "currentRole": "Test Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP005",
+                "fullName": "Subramanyam Kanithi",
+                "email": "subramanyam.kanithi@sailssoftware.com",
+                "currentRole": "Software Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP006",
+                "fullName": "Prathyusha Bobbala",
+                "email": "prathyusha.bobbala@sailssoftware.com",
+                "currentRole": ".net Developer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP007",
+                "fullName": "ThilaKavathi Dommaraju",
+                "email": "thilakavathi.dommaraju@sailssoftware.com",
+                "currentRole": ".net Developer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP008",
+                "fullName": "Rajarshee Roy",
+                "email": "rajarshee.roy@sailssoftware.com",
+                "currentRole": "SoftwareEngineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP009",
+                "fullName": "kiran kumar Avk ",
+                "email": "kirankumar.avk@sailssoftware.com",
+                "currentRole": "Full Stack Developer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP010",
+                "fullName": "SaiPreethi Abbireddy",
+                "email": "saipreethi.abbireddy@sailssoftware.com",
+                "currentRole": "Software Engineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
+        await db.employee_data.insert_one(
+            {
+                "employeeId": "EMP011",
+                "fullName": "UdayGanesh Kanteti",
+                "email": "udayganesh.kanteti@sailssoftware.com",
+                "currentRole": "SoftwareEngineer",
+                "department": "Engineering",
+                "status": "Active",
+                "role": "EMPLOYEE",
+                "lastProfileUpdate": datetime.now(timezone.utc),
+            }
+        )
+        
         await db.employee_resume_data.insert_one(
             {
                 "employee_id": "EMP001",
