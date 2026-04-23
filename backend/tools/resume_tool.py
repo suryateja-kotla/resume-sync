@@ -104,6 +104,7 @@ async def extract_resume(
 
         extracted = json.loads(raw_text)
         extracted["employee_id"] = employee_id
+<<<<<<< resume-sync/surya
         if "technical_skills" in extracted and isinstance(extracted["technical_skills"], dict):
             clean_skills = {}
             for k, v in extracted["technical_skills"].items():
@@ -122,6 +123,15 @@ async def extract_resume(
         extracted = replace_nulls_with_empty_string(extracted)
 
         payload = EmployeePayload(**extracted)
+=======
+        try:
+            payload = EmployeePayload(**extracted)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to create EmployeePayload: {str(e)}",
+            }
+>>>>>>> resume-upload-flow
         await save_employee_resume_data(
             employee_id,
             payload.model_dump(),
