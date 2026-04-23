@@ -59,6 +59,7 @@ async def seed_database():
                         "department": {"bsonType": "string"},
                         "status": {"enum": ["Active", "Inactive", "On Leave"]},
                         "role": {"enum": ["HR", "EMPLOYEE"]},
+                        "on_bench": {"bsonType": "bool"},
                         "lastProfileUpdate": {"bsonType": "date"},
                     },
                 }
@@ -82,6 +83,7 @@ async def seed_database():
                     ],
                     "properties": {
                         "employee_id": {"bsonType": "string"},
+                        "on_bench": {"bsonType": "bool"},
                         "total_experience": {
                             "bsonType": "int",
                             "description": "Total years of experience",
@@ -216,6 +218,7 @@ async def seed_database():
                 "department": "Human Resources",
                 "status": "Active",
                 "role": "HR",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -230,6 +233,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -243,6 +247,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -256,6 +261,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -269,6 +275,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -282,6 +289,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -295,6 +303,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -308,6 +317,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -321,6 +331,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -334,6 +345,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -346,6 +358,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
@@ -359,6 +372,7 @@ async def seed_database():
                 "department": "Engineering",
                 "status": "Active",
                 "role": "EMPLOYEE",
+                "is_on_bench": False,
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
