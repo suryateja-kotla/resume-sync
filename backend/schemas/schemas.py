@@ -118,6 +118,7 @@ class LoginResponse(BaseModel):
 class CandidateSearchRequest(BaseModel):
     query: str
     employee_id: Optional[str] | None = None
+    session_id: Optional[str] | None = None
 
 
 class CandidateResult(BaseModel):

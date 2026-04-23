@@ -153,9 +153,13 @@ async def run_agent(
 
     logger.info(f"kavya Running agent | user_id={user_id} | session_id={session_id}")
 
-    await session_service.create_session(
-        user_id=user_id, session_id=session_id, app_name=APP_NAME
+    existing = await session_service.get_session(
+        app_name=APP_NAME, user_id=user_id, session_id=session_id
     )
+    if existing is None:
+        await session_service.create_session(
+            app_name=APP_NAME, user_id=user_id, session_id=session_id
+        )
 
     user_message = types.Content(
         role="user", parts=[types.Part.from_text(text=json.dumps(prompt))]

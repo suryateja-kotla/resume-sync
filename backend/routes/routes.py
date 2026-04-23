@@ -135,11 +135,13 @@ async def search_candidates(request: CandidateSearchRequest):
             "query": request.query,
             "employee_id": request.employee_id,
         },
+        session_id=request.session_id,
     )
     reply = response.get("reply", {})
+    session_id = response.get("session_id")
     status = reply.get("status", "error")
 
-    # Text/greeting/out-of-scope replies — no candidate data expected
+    # Text/greeting/pending_confirmation replies — no candidate data expected
     if status in ("text", "pending_confirmation"):
         return {
             "status": status,
@@ -147,6 +149,7 @@ async def search_candidates(request: CandidateSearchRequest):
             "candidates": [],
             "message": reply.get("message"),
             "excel_filename": None,
+            "session_id": session_id,
         }
 
     excel_path = reply.get("excel_path")
@@ -157,6 +160,7 @@ async def search_candidates(request: CandidateSearchRequest):
         "candidates": reply.get("candidates", []),
         "message": reply.get("message"),
         "excel_filename": excel_filename,
+        "session_id": session_id,
     }
 
 
