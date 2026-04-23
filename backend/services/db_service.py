@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
 from schemas.schemas import EmployeePayload
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -24,7 +27,7 @@ async def get_employee_by_email(email: str) -> Optional[Dict[str, Any]]:
     try:
         return await col_employee_data.find_one({"email": email}, {"_id": 0})
     except PyMongoError as e:
-        print(f"[ERROR] get_employee_by_email: {e}")
+        logger.error(f"get_employee_by_email error: {e}")
         return None
 
 
@@ -34,7 +37,7 @@ async def get_employee_resume_data(employee_id: str) -> Optional[Dict[str, Any]]
             {"employee_id": employee_id}, {"_id": 0}
         )
     except PyMongoError as e:
-        print(f"[ERROR] get_employee_resume_data: {e}")
+        logger.error(f"get_employee_resume_data error: {e}")
         return None
 
 
@@ -86,6 +89,7 @@ async def upsert_employee_data(
         }
 
     except PyMongoError as e:
+        logger.error(f"save_employee_resume_data error for {employee_id}: {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -131,7 +135,7 @@ async def get_resume_path(employee_id: str) -> Optional[str]:
         )
         return doc.get("resume_path") if doc else None
     except PyMongoError as e:
-        print(f"[ERROR] get_resume_path: {e}")
+        logger.error(f"get_resume_path error: {e}")
         return None
 
 
@@ -150,4 +154,5 @@ async def upsert_resume_path(employee_id: str, resume_path: str) -> Dict[str, An
             },
         }
     except PyMongoError as e:
+        logger.error(f"upsert_resume_path error for {employee_id}: {e}")
         return {"status": "error", "message": str(e)}

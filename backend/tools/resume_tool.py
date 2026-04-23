@@ -158,7 +158,10 @@ async def generate_resume_docx(employee_id: str) -> dict:
         if gen_result["status"] == "error":
             return gen_result
 
-        return {"status": "success", "resume_path": gen_result["data"]}
+        file_name=f"{employee_id}_resume.docx"
+        file_path=os.abspath(os.path.join(_OUTPUT_DIR, file_name))
+
+        return {"status": "success", "resume_path": file_path}
 
     except Exception as e:
         return {"status": "error", "message": f"Resume generation failed: {str(e)}"}

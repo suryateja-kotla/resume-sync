@@ -3,6 +3,7 @@ import shutil
 import tempfile
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
+from schemas.schemas import EmployeePayload
 import logging
 from tools.resume_tool import generate_resume_docx
 from services.db_service import (
@@ -21,7 +22,6 @@ from schemas.schemas import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
 
 @router.get("/health")
 async def health_check():
@@ -86,12 +86,23 @@ async def update_employee_profile(request: ProfileUpdateRequest):
         updated["interests"] = request.interests
     if request.work_experience is not None:
         updated["work_experience"] = request.work_experience
-
-    await save_employee_resume_data(employee_id, updated)
+    logger.info(f"Updating profile for employee_id={employee_id} with data: {updated.get('work_experience', {})}")
+    payload = EmployeePayload(**updated)
+    save_result = await save_employee_resume_data(employee_id, payload.model_dump())
+    if save_result.get("status") != "success":
+        logger.error(f"Failed to save resume data for {employee_id}: {save_result}")
+        return save_result
     existing_resume_path = await get_resume_path(employee_id)
     if existing_resume_path:
         try:
-            os.remove(existing_resume_path)
+            abs_path = os.path.abspath(existing_resume_path)
+
+            if os.path.exists(abs_path):
+                os.remove(abs_path)
+                logger.info(f"Deleted old resume: {abs_path}")
+            else:
+                logger.warning(f"Skipping delete, not a file: {abs_path}")
+
         except Exception as e:
             logger.error(f"Failed to remove old resume file: {e}")
     result = await generate_resume_docx(employee_id)
