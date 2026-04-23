@@ -104,6 +104,22 @@ async def extract_resume(
 
         extracted = json.loads(raw_text)
         extracted["employee_id"] = employee_id
+        if "technical_skills" in extracted and isinstance(extracted["technical_skills"], dict):
+            clean_skills = {}
+            for k, v in extracted["technical_skills"].items():
+                clean_key = str(k).replace(".", "_").replace("$", "")
+                clean_skills[clean_key] = v
+            extracted["technical_skills"] = clean_skills
+
+        # CRITICAL FIX 1.5: Strip all nulls to satisfy MongoDB's strict string schemas
+        def replace_nulls_with_empty_string(data):
+            if isinstance(data, dict):
+                return {k: replace_nulls_with_empty_string(v) if v is not None else "" for k, v in data.items()}
+            elif isinstance(data, list):
+                return [replace_nulls_with_empty_string(i) if i is not None else "" for i in data]
+            return data
+
+        extracted = replace_nulls_with_empty_string(extracted)
 
         payload = EmployeePayload(**extracted)
         await save_employee_resume_data(

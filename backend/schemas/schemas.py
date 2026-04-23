@@ -38,15 +38,15 @@ class Education(BaseModel):
 
 class EmployeePayload(BaseModel):
     employee_id: Optional[str] = None
-    total_experience: Optional[int] = None
-    personal_info: PersonalInfo
-    profile_summary: str
-    technical_skills: Dict[str, List[str]]
-    work_experience: List[WorkExperience]
-    education: List[Education]
-    certifications: Optional[List[str]] = None
-    achievements: Optional[List[str]] = None
-    interests: Optional[List[str]] = None
+    total_experience: Optional[int] = 0
+    personal_info: PersonalInfo = Field(default_factory=PersonalInfo)
+    profile_summary: Optional[str] = ""
+    technical_skills: Dict[str, List[str]] = Field(default_factory=dict)
+    work_experience: List[WorkExperience] = Field(default_factory=list)
+    education: List[Education] = Field(default_factory=list)
+    certifications: Optional[List[str]] = Field(default_factory=list)
+    achievements: Optional[List[str]] = Field(default_factory=list)
+    interests: Optional[List[str]] = Field(default_factory=list)
 
     def get_search_tags(self) -> List[str]:
         """Flatten all skill values into a single list for fast MongoDB querying."""
