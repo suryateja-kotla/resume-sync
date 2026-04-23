@@ -96,6 +96,7 @@ async def update_employee_profile(request: ProfileUpdateRequest):
     if existing_resume_path:
         try:
             abs_path = os.path.abspath(existing_resume_path)
+            logger.info(f"Existing resume path for {employee_id}: {abs_path}")
 
             if os.path.exists(abs_path):
                 os.remove(abs_path)
@@ -105,11 +106,15 @@ async def update_employee_profile(request: ProfileUpdateRequest):
 
         except Exception as e:
             logger.error(f"Failed to remove old resume file: {e}")
+    logger.info(f"Generating resume docx for {employee_id}")
     result = await generate_resume_docx(employee_id)
+    logger.info(f"generate_resume_docx result for {employee_id}: {result}")
     if result.get("status") != "success":
+        logger.error(f"Resume generation failed for {employee_id}: {result}")
         return result
     resume_path = result.get("resume_path")
-    await upsert_resume_path(employee_id, resume_path)
+    upsert_result = await upsert_resume_path(employee_id, resume_path)
+    logger.info(f"upsert_resume_path result for {employee_id}: {upsert_result}")
 
     return {"status": "success", "message": "Profile updated"}
 

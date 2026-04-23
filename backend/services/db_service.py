@@ -57,7 +57,7 @@ def _extract_search_tags(skills: Dict[str, Any]) -> list:
 
 async def upsert_employee_data(
     employee_id: str,
-    full_name: str,
+    full_name: Optional[str] = None,
     current_role: Optional[str] = None,
     department: Optional[str] = None,
     status: str = "Active",
@@ -65,14 +65,19 @@ async def upsert_employee_data(
     try:
         update_fields = {
             "employeeId": employee_id,
-            "fullName": full_name,
             "status": status,
             "lastProfileUpdate": datetime.now(timezone.utc),
         }
+        # include fullName only when provided to avoid writing null
+        if full_name is not None:
+            update_fields["fullName"] = full_name
         if current_role:
             update_fields["currentRole"] = current_role
         if department:
             update_fields["department"] = department
+
+        logger.debug(f"upsert_employee_data preparing update for {employee_id}: full_name={full_name!r}")
+        logger.debug(f"upsert_employee_data update_fields: {update_fields}")
 
         result = await col_employee_data.update_one(
             {"employeeId": employee_id},
@@ -143,7 +148,13 @@ async def upsert_resume_path(employee_id: str, resume_path: str) -> Dict[str, An
     try:
         result = await col_resume_store.update_one(
             {"employee_id": employee_id},
-            {"$set": {"employee_id": employee_id, "resume_path": resume_path}},
+            {
+                "$set": {
+                    "employee_id": employee_id,
+                    "resume_path": resume_path,
+                    "last_updated_at": datetime.now(timezone.utc),
+                }
+            },
             upsert=True,
         )
         return {
