@@ -108,9 +108,13 @@ export default function HRDashboard() {
 
     try {
       const { data } = await api.post('/search-candidates', { query })
+      const status: string = data.status || 'error'
       const candidates: Candidate[] = data.candidates || []
       const excel_filename: string | undefined = data.excel_filename || undefined
-      const custom_message: string | undefined = data.message // <-- ADDED
+      const agent_message: string | undefined = data.message
+
+      // For text/greeting/pending_confirmation replies, show the message directly
+      const isTextReply = status === 'text' || status === 'pending_confirmation'
 
       setMessages(prev =>
         prev.map(m =>
@@ -118,14 +122,13 @@ export default function HRDashboard() {
             ? {
                 ...m,
                 loading: false,
-                // Check if the agent sent a custom message (like "Successfully updated bench status")
-                text: custom_message 
-                    ? custom_message 
-                    : (candidates.length === 0
-                        ? 'No candidates found matching your query. Try different skills or experience range.'
-                        : `Found ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}:`),
-                candidates: candidates.length > 0 ? candidates : undefined,
-                excel_filename: candidates.length > 0 ? excel_filename : undefined,
+                text: isTextReply || agent_message
+                  ? agent_message
+                  : (candidates.length === 0
+                      ? 'No candidates found matching your query. Try different skills or experience range.'
+                      : `Found ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}:`),
+                candidates: !isTextReply && candidates.length > 0 ? candidates : undefined,
+                excel_filename: !isTextReply && candidates.length > 0 ? excel_filename : undefined,
               }
             : m
         )
@@ -258,7 +261,7 @@ export default function HRDashboard() {
                             />
                           ))}
                         </div>
-                        <span className="text-gray-400 text-sm">Searching candidates...</span>
+                        <span className="text-gray-400 text-sm">Thinking...</span>
                       </div>
                     ) : (
                       <>

@@ -137,10 +137,22 @@ async def search_candidates(request: CandidateSearchRequest):
         },
     )
     reply = response.get("reply", {})
+    status = reply.get("status", "error")
+
+    # Text/greeting/out-of-scope replies — no candidate data expected
+    if status in ("text", "pending_confirmation"):
+        return {
+            "status": status,
+            "count": 0,
+            "candidates": [],
+            "message": reply.get("message"),
+            "excel_filename": None,
+        }
+
     excel_path = reply.get("excel_path")
     excel_filename = os.path.basename(excel_path) if excel_path else None
     return {
-        "status": reply.get("status", "error"),
+        "status": status,
         "count": reply.get("count", 0),
         "candidates": reply.get("candidates", []),
         "message": reply.get("message"),

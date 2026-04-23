@@ -203,6 +203,6 @@ async def run_agent(
     try:
         parsed_reply = json.loads(reply)
     except json.JSONDecodeError:
-        parsed_reply = {"status": "error", "message": reply}
+        parsed_reply = {"status": "text", "message": reply, "count": 0, "candidates": [], "excel_path": None}
 
     return {"session_id": session_id, "reply": parsed_reply}
