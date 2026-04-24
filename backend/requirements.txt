@@ -34,3 +34,6 @@ PyMuPDF                 # fitz — fast PDF text + image extraction
 langfuse
 opentelemetry-sdk
 opentelemetry-exporter-otlp-proto-http 
+
+email-validator
+pydantic-settings

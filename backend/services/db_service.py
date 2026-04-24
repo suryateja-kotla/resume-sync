@@ -31,6 +31,18 @@ async def get_employee_by_email(email: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+async def get_all_employees() -> list[Dict[str, Any]]:
+    try:
+        cursor = col_employee_data.find(
+            {"email": {"$exists": True, "$ne": None}},
+            {"_id": 0, "email": 1, "fullName": 1},
+        )
+        return [employee async for employee in cursor]
+    except PyMongoError as e:
+        logger.error(f"get_all_employees error: {e}")
+        return []
+
+
 async def get_employee_resume_data(employee_id: str) -> Optional[Dict[str, Any]]:
     try:
         return await col_employee_resume_data.find_one(
