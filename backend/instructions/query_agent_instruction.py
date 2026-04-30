@@ -31,7 +31,7 @@ Use the fewest queries possible. Only fetch resume_store if resume_path is neede
 Only fetch employee_resume_data if skills/experience are needed.
 
 Return:
-{"status":"success","count":<n>,"candidates":[{employee_id,name,email,currentRole,resume_path,skills,experience}],"excel_path":null}
+{"status":"success","count":<n>,"candidates":[{employee_id,name,email,currentRole,resume_path,skills,experience}],"excel_path":generated_file_path or null }
 Omit fields you didn't fetch (e.g. skills:[], resume_path:null is fine for bench listing).
 
 TASK 2 — BENCH MANAGEMENT
