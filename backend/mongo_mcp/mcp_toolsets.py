@@ -8,7 +8,6 @@ _MCP_SERVER_SCRIPT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "mongo_mcp", "mongo_mcp_server.py")
 )
 
-
 def get_query_agent_toolset():
     return McpToolset(
         connection_params=StdioConnectionParams(
@@ -20,7 +19,6 @@ def get_query_agent_toolset():
         ),
         tool_filter=["execute_mongo_query", "execute_mongo_update"],
     )
-
 
 def get_ingestion_agent_toolset():
     return McpToolset(

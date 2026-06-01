@@ -37,7 +37,6 @@ async def save_resume_path(employee_id: str, resume_path: str):
             },
             upsert=True,
         )
-
         return {
             "status": "success",
             "data": {
@@ -45,10 +44,8 @@ async def save_resume_path(employee_id: str, resume_path: str):
                 "upserted": result.upserted_id is not None,
             },
         }
-
     except PyMongoError as e:
         return {"status": "error", "message": str(e)}
-
 
 @mcp.tool
 async def log_audit_event(
@@ -66,10 +63,8 @@ async def log_audit_event(
         result = await col_audit_data.insert_one(doc)
 
         return {"status": "success", "data": {"inserted_id": str(result.inserted_id)}}
-
     except PyMongoError as e:
         return {"status": "error", "message": str(e)}
-
 
 async def search_employees(
     skills: List[str],
@@ -79,7 +74,6 @@ async def search_employees(
 ) -> Dict[str, Any]:
     try:
         and_conditions = []
-
         if skills:
             skill_queries = [
                 {"search_tags": {"$regex": s, "$options": "i"}} for s in skills
@@ -90,7 +84,6 @@ async def search_employees(
         if max_experience is not None:
             experience_filter["$lte"] = max_experience
         and_conditions.append({"total_experience": experience_filter})
-
         if isOnBench is not None:
             and_conditions.append({"isOnBench": isOnBench})
 
@@ -166,9 +159,7 @@ async def search_employees_and_get_resume_paths(
                 "isOnBench": rdata.get("isOnBench", False),
             }
         )
-
     return json.dumps({"status": "success", "count": len(results), "data": results})
-
 
 @mcp.tool
 async def get_employee_resume_by_id(employee_id: str):
