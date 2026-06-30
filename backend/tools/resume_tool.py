@@ -13,12 +13,18 @@ from instructions.extraction_instruction import EXTRACTION_INSTRUCTION
 
 logger = logging.getLogger(__name__)
 
-client = genai.Client(
-    # vertexai=True,
-    # project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-    # location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
-    api_key=os.getenv("GOOGLE_API_KEY"),
-)
+_USE_VERTEXAI = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() == "true"
+
+if _USE_VERTEXAI:
+    client = genai.Client(
+        vertexai=True,
+        project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+        location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+    )
+else:
+    client = genai.Client(
+        api_key=os.getenv("GOOGLE_API_KEY"),
+    )
 
 _docx_tool = DocxTool()
 _normalizer = ResumeNormalizer()

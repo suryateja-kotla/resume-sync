@@ -5,12 +5,21 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from schemas.schemas import EmployeePayload
 import logging
+from constants.skill_categories import SKILL_CATEGORIES
 from tools.resume_tool import generate_resume_docx
+from tools.excel_tools import create_talent_excel
 from services.db_service import (
     get_employee_by_email,
     get_employee_resume_data,
+    get_employee_skill_summary,
+    get_employees_by_skill,
+    get_full_employee_directory,
+    get_new_employees,
     get_resume_path,
+    get_skill_rack_summary,
+    provision_new_employee,
     save_employee_resume_data,
+    upsert_employee_skill_summary,
     upsert_resume_path,
 )
 from schemas.schemas import (
@@ -18,6 +27,8 @@ from schemas.schemas import (
     LoginResponse,
     CandidateSearchRequest,
     ProfileUpdateRequest,
+    SkillSummaryUpdateRequest,
+    SendResumeInviteRequest,
 )
 
 router = APIRouter()
@@ -32,6 +43,11 @@ async def health_check():
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     emp = await get_employee_by_email(request.email)
+    if not emp:
+        # First login for this email — auto-provision as a new employee so
+        # anyone who received an onboarding invite can log in immediately
+        # and land on the Upload Resume tab.
+        emp = await provision_new_employee(request.email)
     return LoginResponse(
         email=request.email,
         role=emp.get("role") if emp else None,
@@ -55,6 +71,7 @@ async def get_employee_profile(email: str):
             "currentRole": emp.get("currentRole"),
             "department": emp.get("department"),
             "resume": resume,
+            "hasResume": resume is not None,
         },
     }
 
@@ -124,6 +141,204 @@ async def update_employee_profile(request: ProfileUpdateRequest):
     logger.info(f"upsert_resume_path result for {employee_id}: {upsert_result}")
 
     return {"status": "success", "message": "Profile updated"}
+
+
+@router.get("/employee-skill-summary")
+async def get_skill_summary(email: str):
+    emp = await get_employee_by_email(email)
+    if not emp:
+        return {"status": "error", "message": "Employee not found"}
+
+    employee_id = emp.get("employeeId", "")
+    summary = await get_employee_skill_summary(employee_id)
+    return {
+        "status": "success",
+        "data": summary
+        or {
+            "employee_id": employee_id,
+            "name": emp.get("fullName"),
+            "current_designation": "",
+            "current_skill": "",
+            "total_exp": 0,
+            "current_skill_exp": 0,
+        },
+    }
+
+
+@router.put("/employee-skill-summary")
+async def update_skill_summary(request: SkillSummaryUpdateRequest):
+    emp = await get_employee_by_email(request.email)
+    if not emp:
+        return {"status": "error", "message": "Employee not found"}
+
+    # employee_id and name are always derived from the employee record below —
+    # they are never taken from the request body, which keeps them immutable.
+    employee_id = emp.get("employeeId", "")
+    name = emp.get("fullName", "")
+
+    result = await upsert_employee_skill_summary(
+        employee_id=employee_id,
+        name=name,
+        email=emp.get("email"),
+        current_designation=request.current_designation,
+        current_skill=request.current_skill,
+        total_exp=request.total_exp,
+        current_skill_exp=request.current_skill_exp,
+    )
+    if result.get("status") != "success":
+        return result
+
+    summary = await get_employee_skill_summary(employee_id)
+    return {"status": "success", "data": summary}
+
+
+@router.get("/hr/new-employees")
+async def list_new_employees():
+    """Employees who haven't uploaded a resume yet — candidates for an
+    onboarding invite email from HR."""
+    employees = await get_new_employees()
+    return {
+        "status": "success",
+        "data": [
+            {
+                "employee_id": e.get("employeeId"),
+                "name": e.get("fullName"),
+                "email": e.get("email"),
+                "department": e.get("department"),
+            }
+            for e in employees
+        ],
+    }
+
+
+@router.post("/hr/send-resume-invite")
+async def send_resume_invite(request: SendResumeInviteRequest):
+    """Sends an onboarding invite to any email HR types in — the recipient
+    does not need to already exist in employee_data. This only sends the
+    email; it does not create a login/account, so the recipient can only
+    actually log in once they've been provisioned in employee_data through
+    whatever onboarding/IT process HR uses for that (account creation and
+    credentials are a separate, not-yet-built concern)."""
+    from config.email_config import settings as email_settings
+    from services.email_service import EmailService
+
+    email = (request.email or "").strip()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return {"status": "error", "message": "Enter a valid email address"}
+
+    emp = await get_employee_by_email(email)
+    recipient_name = (
+        (emp.get("fullName") if emp else None)
+        or request.name
+        or email.split("@")[0].replace(".", " ").title()
+    )
+
+    try:
+        EmailService(email_settings).send_new_employee_invite(
+            recipient_email=email,
+            recipient_name=recipient_name,
+            update_url=email_settings.frontend_update_url,
+        )
+        return {"status": "success", "message": f"Invite sent to {email}"}
+    except Exception as e:
+        logger.error(f"send_resume_invite failed for {email}: {e}")
+        return {"status": "error", "message": "Failed to send invite email"}
+
+
+@router.get("/skill-categories")
+async def list_skill_categories():
+    """The fixed list of canonical skill categories used by the Skill
+    Profile dropdown (employee side) and the HR Skill Dashboard racks."""
+    return {"status": "success", "data": SKILL_CATEGORIES}
+
+
+@router.get("/hr/skill-summary")
+async def skill_summary():
+    """Unique skill racks (derived from employee_skill_summary.current_skill)
+    with employee headcount, for the HR Skill Dashboard."""
+    data = await get_skill_rack_summary()
+    return {"status": "success", "data": data}
+
+
+@router.get("/hr/skill-employees")
+async def skill_employees(skill: str):
+    """Employees whose current_skill matches the given skill rack."""
+    data = await get_employees_by_skill(skill)
+    return {"status": "success", "skill": skill, "data": data}
+
+
+@router.get("/hr/skill-employees-excel")
+async def skill_employees_excel(skill: str):
+    """Generates an Excel report for the employees in one skill rack
+    (e.g. clicking 'Generate Excel' on the Java rack drill-down panel)."""
+    data = await get_employees_by_skill(skill)
+    if not data:
+        raise HTTPException(status_code=404, detail="No employees found for this skill")
+
+    rows = [
+        {
+            "Employee ID": e.get("employee_id"),
+            "Name": e.get("name"),
+            "Email": e.get("email"),
+            "Current Designation": e.get("current_designation"),
+            "Current Skill": e.get("current_skill"),
+            "Total Experience (yrs)": e.get("total_exp"),
+            "Current Skill Experience (yrs)": e.get("current_skill_exp"),
+            # Must stay named exactly "resume_path" — create_talent_excel
+            # looks for this column to build the clickable resume hyperlink.
+            "resume_path": e.get("resume_path"),
+        }
+        for e in data
+    ]
+
+    result = create_talent_excel(rows)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail=result.get("message", "Excel generation failed"))
+
+    filename = os.path.basename(result["saved_location"])
+    return {"status": "success", "excel_filename": filename, "count": len(data)}
+
+
+@router.get("/hr/all-employees")
+async def all_employees():
+    """Full org-wide employee directory for the HR Employee List section."""
+    data = await get_full_employee_directory()
+    return {"status": "success", "count": len(data), "data": data}
+
+
+@router.get("/hr/all-employees-excel")
+async def all_employees_excel():
+    """Generates an Excel report containing every employee in the org."""
+    data = await get_full_employee_directory()
+    if not data:
+        raise HTTPException(status_code=404, detail="No employees found")
+
+    rows = [
+        {
+            "Employee ID": e.get("employee_id"),
+            "Name": e.get("name"),
+            "Email": e.get("email"),
+            "Department": e.get("department"),
+            "Current Role": e.get("current_role"),
+            "Current Designation": e.get("current_designation"),
+            "Current Skill": e.get("current_skill"),
+            "Total Experience (yrs)": e.get("total_exp"),
+            "Current Skill Experience (yrs)": e.get("current_skill_exp"),
+            "Bench Status": e.get("bench_status"),
+            "Resume Status": e.get("resume_status"),
+            # Must stay named exactly "resume_path" — create_talent_excel
+            # looks for this column to build the clickable resume hyperlink.
+            "resume_path": e.get("resume_path"),
+        }
+        for e in data
+    ]
+
+    result = create_talent_excel(rows)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail=result.get("message", "Excel generation failed"))
+
+    filename = os.path.basename(result["saved_location"])
+    return {"status": "success", "excel_filename": filename, "count": len(data)}
 
 
 @router.post("/search-candidates")

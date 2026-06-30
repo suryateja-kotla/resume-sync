@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 
-type Tab = 'profile' | 'upload'
+type Tab = 'profile' | 'upload' | 'experience'
 
 interface Education {
   year?: string
@@ -56,6 +56,7 @@ interface ProfileData {
   email?: string
   currentRole?: string
   department?: string
+  hasResume?: boolean
   resume?: {
     profile_summary?: string
     technical_skills?: Record<string, string[]>
@@ -67,6 +68,15 @@ interface ProfileData {
     personal_info?: { full_name: string }
     work_experience?: WorkExperienceItem[]
   }
+}
+
+interface SkillSummary {
+  employee_id: string
+  name: string
+  current_designation: string
+  current_skill: string
+  total_exp: number
+  current_skill_exp: number
 }
 
 const groupWorkExperience = (items: WorkExperienceItem[]): WorkExpGroup[] => {
@@ -106,6 +116,19 @@ export default function EmployeeDashboard() {
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const [initialTabSet, setInitialTabSet] = useState(false)
+
+  // Skill Profile (employee_skill_summary)
+  const [skillSummary, setSkillSummary] = useState<SkillSummary | null>(null)
+  const [skillSummaryLoading, setSkillSummaryLoading] = useState(true)
+  const [skillEditMode, setSkillEditMode] = useState(false)
+  const [skillSaving, setSkillSaving] = useState(false)
+  const [skillSaveMsg, setSkillSaveMsg] = useState('')
+  const [editDesignation, setEditDesignation] = useState('')
+  const [editCurrentSkill, setEditCurrentSkill] = useState('')
+  const [editTotalExp, setEditTotalExp] = useState(0)
+  const [editSkillExp, setEditSkillExp] = useState(0)
+  const [skillCategories, setSkillCategories] = useState<string[]>([])
 
   const [editSummary, setEditSummary] = useState('')
   const [editExperience, setEditExperience] = useState(0)
@@ -124,16 +147,77 @@ export default function EmployeeDashboard() {
   const [editOpenProjects, setEditOpenProjects] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (user?.email) fetchProfile()
+    if (user?.email) {
+      fetchProfile()
+      fetchSkillSummary()
+      fetchSkillCategories()
+    }
   }, [user?.email])
 
   const fetchProfile = async () => {
     setProfileLoading(true)
     try {
       const { data } = await api.get('/employee-profile', { params: { email: user!.email } })
-      if (data.status === 'success') setProfile(data.data)
+      if (data.status === 'success') {
+        setProfile(data.data)
+        // New employees (no resume yet) land on Upload; existing employees land on My Profile.
+        if (!initialTabSet) {
+          setTab(data.data.hasResume ? 'profile' : 'upload')
+          setInitialTabSet(true)
+        }
+      }
     } catch { /* ignore */ }
     finally { setProfileLoading(false) }
+  }
+
+  const fetchSkillSummary = async () => {
+    setSkillSummaryLoading(true)
+    try {
+      const { data } = await api.get('/employee-skill-summary', { params: { email: user!.email } })
+      if (data.status === 'success') setSkillSummary(data.data)
+    } catch { /* ignore */ }
+    finally { setSkillSummaryLoading(false) }
+  }
+
+  const fetchSkillCategories = async () => {
+    try {
+      const { data } = await api.get('/skill-categories')
+      if (data.status === 'success') setSkillCategories(data.data)
+    } catch { /* ignore */ }
+  }
+
+  const startSkillEdit = () => {
+    setEditDesignation(skillSummary?.current_designation || '')
+    setEditCurrentSkill(skillSummary?.current_skill || '')
+    setEditTotalExp(skillSummary?.total_exp || 0)
+    setEditSkillExp(skillSummary?.current_skill_exp || 0)
+    setSkillEditMode(true)
+    setSkillSaveMsg('')
+  }
+
+  const handleSkillSave = async () => {
+    setSkillSaving(true)
+    setSkillSaveMsg('')
+    try {
+      const { data } = await api.put('/employee-skill-summary', {
+        email: user!.email,
+        current_designation: editDesignation,
+        current_skill: editCurrentSkill,
+        total_exp: editTotalExp,
+        current_skill_exp: editSkillExp,
+      })
+      if (data.status === 'success') {
+        setSkillSummary(data.data)
+        setSkillSaveMsg('Experience snapshot saved successfully!')
+        setSkillEditMode(false)
+      } else {
+        setSkillSaveMsg(data.message || 'Failed to save. Please try again.')
+      }
+    } catch {
+      setSkillSaveMsg('Failed to save. Please try again.')
+    } finally {
+      setSkillSaving(false)
+    }
   }
 
   const blankProjectInEntry = (): ProjectInEntry => ({
@@ -344,6 +428,8 @@ export default function EmployeeDashboard() {
         setUploadFile(null)
         if (fileRef.current) fileRef.current.value = ''
         await fetchProfile()
+        // Resume now exists — move off the Upload tab, which will be hidden on next render.
+        setTab('profile')
       } else {
         setUploadMsg(reply.message || data.message || 'Upload failed. Please try again.')
       }
@@ -357,6 +443,16 @@ export default function EmployeeDashboard() {
   const handleLogout = () => { logout(); navigate('/login') }
 
   const resume = profile?.resume
+  // Existing employees already have resume data seeded/uploaded server-side, so they
+  // manage their profile via My Profile + Experience Snapshot and never see Upload again.
+  // Only employees with no resume data yet (new joiners) see the Upload Resume tab.
+  const hasResume = !!profile?.hasResume
+  const visibleTabs = hasResume
+    ? [
+        { key: 'profile' as Tab, label: 'My Profile' },
+        { key: 'experience' as Tab, label: 'Skill Profile' },
+      ]
+    : [{ key: 'upload' as Tab, label: 'Upload Resume' }]
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -399,13 +495,10 @@ export default function EmployeeDashboard() {
         </div>
 
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-8">
-          {[
-            { key: 'profile', label: 'My Profile' },
-            { key: 'upload', label: 'Upload Resume' },
-          ].map(t => (
+          {visibleTabs.map(t => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key as Tab)}
+              onClick={() => setTab(t.key)}
               className={`px-5 py-2.5 rounded-lg text-sm font-medium transition ${
                 tab === t.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -1135,6 +1228,180 @@ export default function EmployeeDashboard() {
                 Resume processing may take 30–60 seconds. You'll see your profile update automatically.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Experience Snapshot Tab */}
+        {tab === 'experience' && (
+          <div className="max-w-2xl space-y-6">
+            {skillSummaryLoading ? (
+              <div className="flex items-center justify-center py-24">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-gray-400 text-sm">Loading skill profile...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-lg font-semibold text-gray-800">Skill Profile</h2>
+                  {!skillEditMode && (
+                    <button
+                      onClick={startSkillEdit}
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 px-4 py-2 rounded-xl transition"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit
+                    </button>
+                  )}
+                </div>
+                <p className="text-gray-400 text-sm mb-6">
+                  A quick-reference profile of your current role and skill experience, used by HR for skill-wise resourcing.
+                </p>
+
+                {/* Static identity fields — never editable */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Employee ID</label>
+                      <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-700 text-sm font-medium">{skillSummary?.employee_id || user?.employeeId}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</label>
+                      <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-700 text-sm font-medium">{skillSummary?.name || user?.fullName}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</label>
+                      <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-700 text-sm font-medium truncate">{profile?.email || user?.email}</p>
+                  </div>
+                </div>
+
+                {skillEditMode ? (
+                  /* ── Edit Form ── */
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-blue-50/50 rounded-xl p-4">
+                        <label className="block text-sm font-semibold text-blue-700 mb-2">Current Designation</label>
+                        <input
+                          type="text" value={editDesignation}
+                          onChange={e => setEditDesignation(e.target.value)}
+                          placeholder="e.g. Senior Software Engineer"
+                          className="w-full px-3 py-2.5 rounded-xl border border-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-800 text-sm bg-white"
+                        />
+                      </div>
+                      <div className="bg-violet-50/50 rounded-xl p-4">
+                        <label className="block text-sm font-semibold text-violet-700 mb-2">Current Skill</label>
+                        <select
+                          value={editCurrentSkill}
+                          onChange={e => setEditCurrentSkill(e.target.value)}
+                          className="w-full px-3 py-2.5 rounded-xl border border-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent text-gray-800 text-sm bg-white"
+                        >
+                          <option value="" disabled>Select a skill...</option>
+                          {skillCategories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="bg-amber-50/50 rounded-xl p-4">
+                        <label className="block text-sm font-semibold text-amber-700 mb-2">Total Experience (years)</label>
+                        <input
+                          type="number" min={0} step={0.5} value={editTotalExp}
+                          onChange={e => setEditTotalExp(Number(e.target.value))}
+                          className="w-full px-3 py-2.5 rounded-xl border border-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent text-gray-800 text-sm bg-white"
+                        />
+                      </div>
+                      <div className="bg-teal-50/50 rounded-xl p-4">
+                        <label className="block text-sm font-semibold text-teal-700 mb-2">Current Skill Experience (years)</label>
+                        <input
+                          type="number" min={0} step={0.5} value={editSkillExp}
+                          onChange={e => setEditSkillExp(Number(e.target.value))}
+                          className="w-full px-3 py-2.5 rounded-xl border border-teal-100 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent text-gray-800 text-sm bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    {skillSaveMsg && (
+                      <div className={`px-4 py-3 rounded-xl text-sm ${
+                        skillSaveMsg.includes('success') ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'
+                      }`}>
+                        {skillSaveMsg}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleSkillSave}
+                        disabled={skillSaving}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2.5 rounded-xl font-medium transition text-sm flex items-center gap-2"
+                      >
+                        {skillSaving ? (
+                          <>
+                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Saving...
+                          </>
+                        ) : 'Save Changes'}
+                      </button>
+                      <button
+                        onClick={() => setSkillEditMode(false)}
+                        className="px-6 py-2.5 rounded-xl font-medium text-sm text-gray-600 hover:bg-gray-100 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── View ── */
+                  <>
+                    {skillSaveMsg && (
+                      <div className="bg-green-50 text-green-700 border border-green-100 px-4 py-3 rounded-xl text-sm mb-4">
+                        {skillSaveMsg}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-blue-50/50 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">Current Designation</p>
+                        <p className="text-gray-800 text-sm">{skillSummary?.current_designation || '—'}</p>
+                      </div>
+                      <div className="bg-violet-50/50 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-1">Current Skill</p>
+                        <p className="text-gray-800 text-sm">{skillSummary?.current_skill || '—'}</p>
+                      </div>
+                      <div className="bg-amber-50/50 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Total Experience</p>
+                        <p className="text-gray-800 text-sm">{skillSummary?.total_exp ?? '—'} yrs</p>
+                      </div>
+                      <div className="bg-teal-50/50 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-teal-700 uppercase tracking-wider mb-1">Current Skill Experience</p>
+                        <p className="text-gray-800 text-sm">{skillSummary?.current_skill_exp ?? '—'} yrs</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

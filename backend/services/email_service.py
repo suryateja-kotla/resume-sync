@@ -33,10 +33,41 @@ class EmailService:
         )
         logger.debug("Email HTML content for %s: %s", recipient_email, html_body)
 
+    def send_new_employee_invite(
+        self,
+        recipient_email: str,
+        recipient_name: str,
+        update_url: str,
+    ) -> None:
+        subject = "Welcome! Please upload your resume"
+        html_body = self._generate_invite_html(recipient_name, update_url)
+
+        if self._settings.email_delivery_mode.lower() == "smtp":
+            self._send_smtp_message(recipient_email, subject, html_body)
+            return
+
+        # Console mode is useful for development and verification.
+        logger.info(
+            "Email delivery mode is console. Invite email to %s would be sent with subject %s.",
+            recipient_email,
+            subject,
+        )
+        logger.debug("Email HTML content for %s: %s", recipient_email, html_body)
+
     def _generate_update_prompt_html(self, name: str, update_url: str) -> str:
         """Load and render the resume update email template."""
         template_path = (
             Path(__file__).parent.parent / "templates" / "resume_update_mail.html"
+        )
+        template_content = template_path.read_text()
+        return template_content.format(name=name, update_url=update_url)
+
+    def _generate_invite_html(self, name: str, update_url: str) -> str:
+        """Load and render the new-employee onboarding invite email template."""
+        template_path = (
+            Path(__file__).parent.parent
+            / "templates"
+            / "new_employee_invite_mail.html"
         )
         template_content = template_path.read_text()
         return template_content.format(name=name, update_url=update_url)

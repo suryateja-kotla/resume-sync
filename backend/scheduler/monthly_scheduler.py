@@ -16,7 +16,7 @@ class MonthlyScheduler:
         run_day: int,
         run_hour: int,
         run_minute: int,
-    ) -> None:
+        ) -> None:
         self._job = job
         self._run_day = run_day
         self._run_hour = run_hour

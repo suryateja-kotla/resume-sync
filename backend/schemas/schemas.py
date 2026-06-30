@@ -141,3 +141,21 @@ class ProfileUpdateRequest(BaseModel):
     achievements: Optional[List[str]] = None
     interests: Optional[List[str]] = None
     work_experience: Optional[List[Dict[str, Any]]] = None
+
+
+# Experience Snapshot (employee_skill_summary collection)
+class SkillSummaryUpdateRequest(BaseModel):
+    """employee_id and name are intentionally excluded — they are immutable
+    and always derived server-side from the authenticated employee record."""
+
+    email: str
+    current_designation: Optional[str] = None
+    current_skill: Optional[str] = None
+    total_exp: Optional[float] = None
+    current_skill_exp: Optional[float] = None
+
+
+# HR — onboarding invite
+class SendResumeInviteRequest(BaseModel):
+    email: str
+    name: Optional[str] = None

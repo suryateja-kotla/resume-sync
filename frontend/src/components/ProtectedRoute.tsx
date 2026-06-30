@@ -11,7 +11,7 @@ export default function ProtectedRoute({ children, requiredRole }: Props) {
 
   if (!user) return <Navigate to="/login" replace />
   if (requiredRole && user.role !== requiredRole) {
-    return <Navigate to={user.role === 'hr' ? '/hr-dashboard' : '/employee-dashboard'} replace />
+    return <Navigate to={user.role === 'HR' ? '/hr-dashboard' : '/employee-dashboard'} replace />
   }
 
   return <>{children}</>

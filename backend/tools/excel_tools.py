@@ -9,6 +9,15 @@ logger = logging.getLogger(__name__)
 _OUTPUT_DIR = os.getenv("EXCEL_OUTPUT_DIR", "output_excels")
 
 
+def _to_file_url(path: str) -> str:
+    """Converts a local Windows/POSIX file path into a file:// URI that
+    Excel's real hyperlink mechanism can open reliably."""
+    normalized = path.replace("\\", "/")
+    if not normalized.startswith("/"):
+        normalized = "/" + normalized
+    return "file://" + normalized
+
+
 def create_talent_excel(employee_data_json: str) -> dict:
     """
     Generates an Excel report containing employee IDs and clickable resume links.
@@ -29,14 +38,18 @@ def create_talent_excel(employee_data_json: str) -> dict:
 
         os.makedirs(_OUTPUT_DIR, exist_ok=True)
 
-        def create_hyperlink(path):
-            if not path or pd.isna(path):
-                return "N/A"
-            return '=HYPERLINK("{}", "Open Resume")'.format(path.replace("/", "\\"))
-
-        if "resume_path" in df.columns:
-            df["clickable_resume"] = df["resume_path"].apply(create_hyperlink)
+        has_resume_links = "resume_path" in df.columns
+        resume_paths = df["resume_path"] if has_resume_links else None
+        if has_resume_links:
+            # Leave a plain placeholder column for the DataFrame write; the
+            # real clickable hyperlink is added afterwards via write_url(),
+            # which produces an actual Excel hyperlink object — a literal
+            # "=HYPERLINK(...)" string written through pandas is just inert
+            # text, not a working link.
             df = df.drop(columns=["resume_path"])
+            df["Resume"] = resume_paths.apply(
+                lambda p: "Open Resume" if p and not pd.isna(p) else "N/A"
+            )
 
         filename = (
             f"Talent_Search_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.xlsx"
@@ -45,6 +58,21 @@ def create_talent_excel(employee_data_json: str) -> dict:
 
         writer = pd.ExcelWriter(full_path, engine="xlsxwriter")
         df.to_excel(writer, index=False, sheet_name="Search Results")
+
+        if has_resume_links:
+            workbook = writer.book
+            worksheet = writer.sheets["Search Results"]
+            link_format = workbook.add_format(
+                {"font_color": "blue", "underline": 1}
+            )
+            resume_col = df.columns.get_loc("Resume")
+            for row_idx, path in enumerate(resume_paths, start=1):  # +1 for header row
+                if path and not pd.isna(path):
+                    worksheet.write_url(
+                        row_idx, resume_col, _to_file_url(path),
+                        cell_format=link_format, string="Open Resume",
+                    )
+
         writer.close()
         return {
             "status": "success",
