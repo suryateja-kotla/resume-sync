@@ -330,10 +330,14 @@ async def get_skill_rack_summary() -> list[Dict[str, Any]]:
         return []
 
 
-async def get_employees_by_skill(skill: str) -> list[Dict[str, Any]]:
+async def get_employees_by_skill(
+    skill: str, min_skill_exp: Optional[float] = None
+) -> list[Dict[str, Any]]:
     """Returns all employees whose current_skill normalizes to the given
     canonical skill category, with the 6-field skill profile shape used by
-    the HR Skill Dashboard drill-down (plus resume_path for Excel export)."""
+    the HR Skill Dashboard drill-down (plus resume_path for Excel export).
+    If min_skill_exp is given, only employees with current_skill_exp >=
+    that value are returned (the "2+ yrs" / "3+ yrs" experience filter)."""
     try:
         target = normalize_skill(skill)
         cursor = col_employee_skill_summary.find(
@@ -351,8 +355,13 @@ async def get_employees_by_skill(skill: str) -> list[Dict[str, Any]]:
         )
         results = []
         async for doc in cursor:
-            if normalize_skill(doc.get("current_skill", "")) == target:
-                results.append(doc)
+            if normalize_skill(doc.get("current_skill", "")) != target:
+                continue
+            if min_skill_exp is not None and (
+                doc.get("current_skill_exp") or 0
+            ) < min_skill_exp:
+                continue
+            results.append(doc)
 
         resume_paths = await _get_resume_paths_by_employee_id(
             [r["employee_id"] for r in results]
@@ -428,3 +437,64 @@ async def get_full_employee_directory() -> list[Dict[str, Any]]:
     except PyMongoError as e:
         logger.error(f"get_full_employee_directory error: {e}")
         return []
+
+
+async def write_audit_event(
+    event_type: str,
+    actor: str,
+    employee_id: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Appends one entry to the audit trail. Never raises — auditing must
+    not be able to break the action it's recording, so failures are only
+    logged, not propagated."""
+    try:
+        await col_audit_data.insert_one(
+            {
+                "event_type": event_type,
+                "actor": actor,
+                "employee_id": employee_id,
+                "timestamp": datetime.now(timezone.utc),
+                "payload": payload or {},
+            }
+        )
+    except PyMongoError as e:
+        logger.error(f"write_audit_event error ({event_type}, actor={actor}): {e}")
+
+
+async def get_audit_log(
+    event_type: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> Dict[str, Any]:
+    """Paginated, filterable audit trail for the HR Audit Log section."""
+    try:
+        query: Dict[str, Any] = {}
+        if event_type:
+            query["event_type"] = event_type
+        if date_from or date_to:
+            ts_filter: Dict[str, Any] = {}
+            if date_from:
+                ts_filter["$gte"] = date_from
+            if date_to:
+                ts_filter["$lte"] = date_to
+            query["timestamp"] = ts_filter
+
+        total = await col_audit_data.count_documents(query)
+        cursor = (
+            col_audit_data.find(query)
+            .sort("timestamp", -1)
+            .skip(max(page - 1, 0) * page_size)
+            .limit(page_size)
+        )
+        events = []
+        async for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            events.append(doc)
+
+        return {"total": total, "page": page, "page_size": page_size, "events": events}
+    except PyMongoError as e:
+        logger.error(f"get_audit_log error: {e}")
+        return {"total": 0, "page": page, "page_size": page_size, "events": []}

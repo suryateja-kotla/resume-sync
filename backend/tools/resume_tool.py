@@ -8,6 +8,7 @@ from schemas.schemas import EmployeePayload
 from services.db_service import (
     get_employee_resume_data,
     save_employee_resume_data,
+    write_audit_event,
 )
 from instructions.extraction_instruction import EXTRACTION_INSTRUCTION
 
@@ -133,6 +134,12 @@ async def extract_resume(
             payload.model_dump(),
             payload.work_experience[0].designation if payload.work_experience else None,
         )
+        await write_audit_event(
+            event_type="RESUME_UPLOAD",
+            actor=employee_id,
+            employee_id=employee_id,
+            payload={"file_path": file_path},
+        )
 
         return {
             "message": "Resume extracted and saved successfully.",
@@ -178,6 +185,13 @@ async def generate_resume_docx(employee_id: str) -> dict:
 
         if gen_result["status"] == "error":
             return gen_result
+
+        await write_audit_event(
+            event_type="RESUME_REGENERATED",
+            actor=employee_id,
+            employee_id=employee_id,
+            payload={"resume_path": gen_result["data"]},
+        )
 
         return {"status": "success", "resume_path": gen_result["data"]}
 

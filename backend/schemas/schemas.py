@@ -159,3 +159,4 @@ class SkillSummaryUpdateRequest(BaseModel):
 class SendResumeInviteRequest(BaseModel):
     email: str
     name: Optional[str] = None
+    actor_email: Optional[str] = None

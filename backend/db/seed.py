@@ -16,28 +16,53 @@ async def seed_database():
     db = client[DB_NAME]
 
     existing_collections = await db.list_collection_names()
-    if "audit_data" not in existing_collections:
-        await db.create_collection(
-            "audit_data",
-            validator={
-                "$jsonSchema": {
-                    "bsonType": "object",
-                    "required": ["employeeId", "timestamp", "action"],
-                    "properties": {
-                        "_id": {"bsonType": "objectId"},
-                        "employeeId": {"bsonType": "string"},
-                        "timestamp": {"bsonType": "date"},
-                        "action": {
-                            "enum": [
-                                "USER_APPROVED",
-                                "USER_EDITED",
-                                "RESUME_UPDATE_REJECTED",
-                            ]
-                        },
-                        "details": {"bsonType": "object"},
-                    },
-                }
+
+    audit_data_validator = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["event_type", "actor", "timestamp"],
+            "properties": {
+                "_id": {"bsonType": "objectId"},
+                "event_type": {
+                    "enum": [
+                        "LOGIN",
+                        "RESUME_UPLOAD",
+                        "PROFILE_UPDATED",
+                        "SKILL_PROFILE_UPDATED",
+                        "RESUME_REGENERATED",
+                        "MONTHLY_UPDATE_SUBMITTED",
+                        "NEW_EMPLOYEE_PROVISIONED",
+                        "INVITE_SENT",
+                        "EXCEL_REPORT_GENERATED",
+                    ]
+                },
+                "actor": {
+                    "bsonType": "string",
+                    "description": "employee_id of who performed the action, or 'SYSTEM'",
+                },
+                "employee_id": {
+                    "bsonType": ["string", "null"],
+                    "description": "employee_id the event is about (may differ from actor, e.g. HR sending an invite)",
+                },
+                "timestamp": {"bsonType": "date"},
+                "payload": {
+                    "bsonType": ["object", "null"],
+                    "description": "Event-specific context, e.g. before/after diff for edits",
+                },
             },
+        }
+    }
+
+    if "audit_data" not in existing_collections:
+        await db.create_collection("audit_data", validator=audit_data_validator)
+        await db.audit_data.create_index("timestamp")
+        await db.audit_data.create_index("event_type")
+        await db.audit_data.create_index("actor")
+    else:
+        # Keep the validator in sync for databases seeded before the audit
+        # logging event types/shape above were introduced.
+        await db.command(
+            "collMod", "audit_data", validator=audit_data_validator
         )
 
     if "employee_data" not in existing_collections:

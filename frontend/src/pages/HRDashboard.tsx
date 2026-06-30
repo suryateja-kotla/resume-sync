@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 
-type Section = 'search' | 'new-employees' | 'skill-dashboard' | 'employee-list'
+type Section = 'search' | 'new-employees' | 'skill-dashboard' | 'employee-list' | 'audit-log'
 
 interface Candidate {
   employee_id: string
@@ -59,6 +59,51 @@ interface EmployeeDirectoryRow {
   current_skill_exp?: number | string
   bench_status?: string
   resume_status?: string
+}
+
+interface AuditEvent {
+  _id: string
+  event_type: string
+  actor: string
+  employee_id: string | null
+  timestamp: string
+  payload: Record<string, unknown>
+}
+
+const AUDIT_EVENT_TYPES = [
+  'LOGIN',
+  'RESUME_UPLOAD',
+  'PROFILE_UPDATED',
+  'SKILL_PROFILE_UPDATED',
+  'RESUME_REGENERATED',
+  'MONTHLY_UPDATE_SUBMITTED',
+  'NEW_EMPLOYEE_PROVISIONED',
+  'INVITE_SENT',
+  'EXCEL_REPORT_GENERATED',
+]
+
+const AUDIT_EVENT_LABELS: Record<string, string> = {
+  LOGIN: 'Login',
+  RESUME_UPLOAD: 'Resume Upload',
+  PROFILE_UPDATED: 'Profile Updated',
+  SKILL_PROFILE_UPDATED: 'Skill Profile Updated',
+  RESUME_REGENERATED: 'Resume Regenerated',
+  MONTHLY_UPDATE_SUBMITTED: 'Monthly Update Submitted',
+  NEW_EMPLOYEE_PROVISIONED: 'New Employee Provisioned',
+  INVITE_SENT: 'Invite Sent',
+  EXCEL_REPORT_GENERATED: 'Excel Report Generated',
+}
+
+const AUDIT_EVENT_COLORS: Record<string, string> = {
+  LOGIN: 'bg-slate-100 text-slate-700',
+  RESUME_UPLOAD: 'bg-blue-50 text-blue-700',
+  PROFILE_UPDATED: 'bg-violet-50 text-violet-700',
+  SKILL_PROFILE_UPDATED: 'bg-violet-50 text-violet-700',
+  RESUME_REGENERATED: 'bg-teal-50 text-teal-700',
+  MONTHLY_UPDATE_SUBMITTED: 'bg-amber-50 text-amber-700',
+  NEW_EMPLOYEE_PROVISIONED: 'bg-green-50 text-green-700',
+  INVITE_SENT: 'bg-blue-50 text-blue-700',
+  EXCEL_REPORT_GENERATED: 'bg-emerald-50 text-emerald-700',
 }
 
 function CandidateCard({ candidate }: { candidate: Candidate }) {
@@ -147,12 +192,33 @@ export default function HRDashboard() {
   const [skillEmployees, setSkillEmployees] = useState<SkillEmployee[]>([])
   const [skillEmployeesLoading, setSkillEmployeesLoading] = useState(false)
   const [skillExcelGenerating, setSkillExcelGenerating] = useState(false)
+  const [skillExpFilter, setSkillExpFilter] = useState<string>('')
+
+  const EXP_FILTER_OPTIONS = [
+    { value: '', label: 'All Experience' },
+    { value: '1', label: '1+ yrs' },
+    { value: '2', label: '2+ yrs' },
+    { value: '3', label: '3+ yrs' },
+    { value: '5', label: '5+ yrs' },
+    { value: '8', label: '8+ yrs' },
+  ]
 
   // Employee List section
   const [allEmployees, setAllEmployees] = useState<EmployeeDirectoryRow[]>([])
   const [allEmployeesLoading, setAllEmployeesLoading] = useState(false)
   const [allEmployeesCount, setAllEmployeesCount] = useState(0)
   const [allExcelGenerating, setAllExcelGenerating] = useState(false)
+
+  // Audit Log section
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditTotal, setAuditTotal] = useState(0)
+  const [auditPage, setAuditPage] = useState(1)
+  const [auditEventTypeFilter, setAuditEventTypeFilter] = useState('')
+  const [auditDateFrom, setAuditDateFrom] = useState('')
+  const [auditDateTo, setAuditDateTo] = useState('')
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null)
+  const AUDIT_PAGE_SIZE = 25
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -162,6 +228,7 @@ export default function HRDashboard() {
     if (section === 'new-employees') fetchNewEmployees()
     if (section === 'skill-dashboard') fetchSkillRacks()
     if (section === 'employee-list') fetchAllEmployees()
+    if (section === 'audit-log') fetchAuditLog(1)
   }, [section])
 
   const fetchNewEmployees = async () => {
@@ -176,7 +243,7 @@ export default function HRDashboard() {
   const sendInvite = async (email: string) => {
     setSendingInvite(email)
     try {
-      const { data } = await api.post('/hr/send-resume-invite', { email })
+      const { data } = await api.post('/hr/send-resume-invite', { email, actor_email: user?.email })
       setInviteStatus(prev => ({ ...prev, [email]: data.status === 'success' ? 'sent' : 'error' }))
     } catch {
       setInviteStatus(prev => ({ ...prev, [email]: 'error' }))
@@ -207,7 +274,7 @@ export default function HRDashboard() {
         continue
       }
       try {
-        const { data } = await api.post('/hr/send-resume-invite', { email })
+        const { data } = await api.post('/hr/send-resume-invite', { email, actor_email: user?.email })
         results.push({
           email,
           status: data.status === 'success' ? 'sent' : 'error',
@@ -236,17 +303,30 @@ export default function HRDashboard() {
 
   const openSkillRack = async (skill: string) => {
     setSelectedSkill(skill)
+    setSkillExpFilter('')
+    await fetchSkillEmployees(skill, '')
+  }
+
+  const fetchSkillEmployees = async (skill: string, minExp: string) => {
     setSkillEmployeesLoading(true)
     try {
-      const { data } = await api.get('/hr/skill-employees', { params: { skill } })
+      const params: Record<string, string> = { skill }
+      if (minExp) params.min_skill_exp = minExp
+      const { data } = await api.get('/hr/skill-employees', { params })
       if (data.status === 'success') setSkillEmployees(data.data)
     } catch { /* ignore */ }
     finally { setSkillEmployeesLoading(false) }
   }
 
+  const handleSkillExpFilterChange = (minExp: string) => {
+    setSkillExpFilter(minExp)
+    if (selectedSkill) fetchSkillEmployees(selectedSkill, minExp)
+  }
+
   const closeSkillRack = () => {
     setSelectedSkill(null)
     setSkillEmployees([])
+    setSkillExpFilter('')
   }
 
   const downloadExcel = (filename: string) => {
@@ -257,7 +337,10 @@ export default function HRDashboard() {
     if (!selectedSkill || skillExcelGenerating) return
     setSkillExcelGenerating(true)
     try {
-      const { data } = await api.get('/hr/skill-employees-excel', { params: { skill: selectedSkill } })
+      const params: Record<string, string> = { skill: selectedSkill }
+      if (skillExpFilter) params.min_skill_exp = skillExpFilter
+      if (user?.email) params.actor_email = user.email
+      const { data } = await api.get('/hr/skill-employees-excel', { params })
       if (data.status === 'success' && data.excel_filename) {
         downloadExcel(data.excel_filename)
       }
@@ -281,12 +364,45 @@ export default function HRDashboard() {
     if (allExcelGenerating) return
     setAllExcelGenerating(true)
     try {
-      const { data } = await api.get('/hr/all-employees-excel')
+      const { data } = await api.get('/hr/all-employees-excel', { params: user?.email ? { actor_email: user.email } : {} })
       if (data.status === 'success' && data.excel_filename) {
         downloadExcel(data.excel_filename)
       }
     } catch { /* ignore */ }
     finally { setAllExcelGenerating(false) }
+  }
+
+  const fetchAuditLog = async (
+    page: number,
+    overrides?: { eventType?: string; dateFrom?: string; dateTo?: string }
+  ) => {
+    const eventType = overrides?.eventType ?? auditEventTypeFilter
+    const dateFrom = overrides?.dateFrom ?? auditDateFrom
+    const dateTo = overrides?.dateTo ?? auditDateTo
+
+    setAuditLoading(true)
+    try {
+      const params: Record<string, string | number> = { page, page_size: AUDIT_PAGE_SIZE }
+      if (eventType) params.event_type = eventType
+      if (dateFrom) params.date_from = new Date(dateFrom).toISOString()
+      if (dateTo) params.date_to = new Date(dateTo + 'T23:59:59').toISOString()
+      const { data } = await api.get('/hr/audit-log', { params })
+      if (data.status === 'success') {
+        setAuditEvents(data.events)
+        setAuditTotal(data.total)
+        setAuditPage(page)
+      }
+    } catch { /* ignore */ }
+    finally { setAuditLoading(false) }
+  }
+
+  const applyAuditFilters = () => fetchAuditLog(1)
+
+  const clearAuditFilters = () => {
+    setAuditEventTypeFilter('')
+    setAuditDateFrom('')
+    setAuditDateTo('')
+    fetchAuditLog(1, { eventType: '', dateFrom: '', dateTo: '' })
   }
 
   const handleLogout = () => {
@@ -374,6 +490,7 @@ export default function HRDashboard() {
               { key: 'new-employees' as Section, label: 'New Employees', icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' },
               { key: 'skill-dashboard' as Section, label: 'Skill Dashboard', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2h0' },
               { key: 'employee-list' as Section, label: 'Employee List', icon: 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4' },
+              { key: 'audit-log' as Section, label: 'Audit Log', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
             ].map(s => (
               <button
                 key={s.key}
@@ -389,11 +506,6 @@ export default function HRDashboard() {
                 {s.key === 'new-employees' && newEmployees.length > 0 && (
                   <span className="ml-auto bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
                     {newEmployees.length}
-                  </span>
-                )}
-                {s.key === 'employee-list' && allEmployeesCount > 0 && (
-                  <span className="ml-auto bg-slate-700 text-slate-200 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                    {allEmployeesCount}
                   </span>
                 )}
               </button>
@@ -473,12 +585,14 @@ export default function HRDashboard() {
               {section === 'new-employees' && 'New Employees'}
               {section === 'skill-dashboard' && 'Skill Dashboard'}
               {section === 'employee-list' && 'Employee List'}
+              {section === 'audit-log' && 'Audit Log'}
             </h1>
             <p className="text-gray-400 text-sm">
               {section === 'search' && 'Find talent using natural language queries'}
               {section === 'new-employees' && 'Send onboarding invites so new hires can upload their resume'}
               {section === 'skill-dashboard' && 'Click a skill rack to see which employees currently work in that stack'}
-              {section === 'employee-list' && `${allEmployeesCount} employee${allEmployeesCount !== 1 ? 's' : ''} across the organization`}
+              {section === 'employee-list' && 'Full directory of employees across the organization'}
+              {section === 'audit-log' && 'Track who changed what, and when, across the system'}
             </p>
           </div>
           {section === 'employee-list' && (
@@ -822,7 +936,13 @@ export default function HRDashboard() {
                 <p className="text-gray-400 text-sm">Employee records will show up here once they're added to the system.</p>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-base font-semibold text-gray-800">
+                    {allEmployeesCount} Employee{allEmployeesCount !== 1 ? 's' : ''}
+                  </h2>
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -871,8 +991,136 @@ export default function HRDashboard() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+                </div>
+              </>
             )}
+          </div>
+        )}
+
+        {/* Audit Log Section */}
+        {section === 'audit-log' && (
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="max-w-5xl mx-auto space-y-4">
+              {/* Filters */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[180px]">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Event Type</label>
+                  <select
+                    value={auditEventTypeFilter}
+                    onChange={e => setAuditEventTypeFilter(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+                  >
+                    <option value="">All Events</option>
+                    {AUDIT_EVENT_TYPES.map(t => (
+                      <option key={t} value={t}>{AUDIT_EVENT_LABELS[t] || t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[150px]">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                  <input
+                    type="date" value={auditDateFrom}
+                    onChange={e => setAuditDateFrom(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+                  />
+                </div>
+                <div className="min-w-[150px]">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                  <input
+                    type="date" value={auditDateTo}
+                    onChange={e => setAuditDateTo(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+                  />
+                </div>
+                <button
+                  onClick={applyAuditFilters}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={clearAuditFilters}
+                  className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition"
+                >
+                  Clear
+                </button>
+              </div>
+
+              {/* Results */}
+              {auditLoading ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : auditEvents.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No audit events found</h3>
+                  <p className="text-gray-400 text-sm">Events will appear here as employees and HR use the system.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-gray-500 text-sm">{auditTotal} total event{auditTotal !== 1 ? 's' : ''}</p>
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+                    {auditEvents.map(ev => (
+                      <div key={ev._id}>
+                        <button
+                          onClick={() => setExpandedAuditId(expandedAuditId === ev._id ? null : ev._id)}
+                          className="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-gray-50/60 transition"
+                        >
+                          <span className="text-gray-400 text-xs whitespace-nowrap w-40 flex-shrink-0">
+                            {new Date(ev.timestamp).toLocaleString()}
+                          </span>
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${AUDIT_EVENT_COLORS[ev.event_type] || 'bg-gray-100 text-gray-700'}`}>
+                            {AUDIT_EVENT_LABELS[ev.event_type] || ev.event_type}
+                          </span>
+                          <span className="text-gray-700 text-sm truncate flex-shrink-0 w-32">
+                            {ev.actor}
+                          </span>
+                          {ev.employee_id && ev.employee_id !== ev.actor && (
+                            <span className="text-gray-400 text-xs truncate">→ {ev.employee_id}</span>
+                          )}
+                          <svg
+                            className={`w-4 h-4 text-gray-400 ml-auto flex-shrink-0 transition-transform ${expandedAuditId === ev._id ? 'rotate-180' : ''}`}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {expandedAuditId === ev._id && (
+                          <div className="px-5 pb-4 pt-1 bg-gray-50/40">
+                            <pre className="text-xs text-gray-600 bg-white border border-gray-100 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+                              {JSON.stringify(ev.payload, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {auditTotal > AUDIT_PAGE_SIZE && (
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => fetchAuditLog(auditPage - 1)}
+                        disabled={auditPage <= 1}
+                        className="text-sm text-gray-600 hover:text-gray-800 disabled:text-gray-300 px-3 py-1.5 rounded-lg transition"
+                      >
+                        ← Previous
+                      </button>
+                      <span className="text-xs text-gray-400">
+                        Page {auditPage} of {Math.ceil(auditTotal / AUDIT_PAGE_SIZE)}
+                      </span>
+                      <button
+                        onClick={() => fetchAuditLog(auditPage + 1)}
+                        disabled={auditPage >= Math.ceil(auditTotal / AUDIT_PAGE_SIZE)}
+                        className="text-sm text-gray-600 hover:text-gray-800 disabled:text-gray-300 px-3 py-1.5 rounded-lg transition"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
       </main>
@@ -895,6 +1143,18 @@ export default function HRDashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-500 flex-shrink-0">Filter by experience:</label>
+                <select
+                  value={skillExpFilter}
+                  onChange={e => handleSkillExpFilterChange(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+                >
+                  {EXP_FILTER_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
               <button
                 onClick={generateSkillExcel}

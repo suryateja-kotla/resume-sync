@@ -1,6 +1,8 @@
 import os
 import shutil
 import tempfile
+from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from schemas.schemas import EmployeePayload
@@ -9,6 +11,7 @@ from constants.skill_categories import SKILL_CATEGORIES
 from tools.resume_tool import generate_resume_docx
 from tools.excel_tools import create_talent_excel
 from services.db_service import (
+    get_audit_log,
     get_employee_by_email,
     get_employee_resume_data,
     get_employee_skill_summary,
@@ -21,6 +24,7 @@ from services.db_service import (
     save_employee_resume_data,
     upsert_employee_skill_summary,
     upsert_resume_path,
+    write_audit_event,
 )
 from schemas.schemas import (
     LoginRequest,
@@ -48,6 +52,22 @@ async def login(request: LoginRequest):
         # anyone who received an onboarding invite can log in immediately
         # and land on the Upload Resume tab.
         emp = await provision_new_employee(request.email)
+        if emp:
+            await write_audit_event(
+                event_type="NEW_EMPLOYEE_PROVISIONED",
+                actor="SYSTEM",
+                employee_id=emp.get("employeeId"),
+                payload={"email": request.email},
+            )
+
+    if emp:
+        await write_audit_event(
+            event_type="LOGIN",
+            actor=emp.get("employeeId", request.email),
+            employee_id=emp.get("employeeId"),
+            payload={"email": request.email, "role": emp.get("role")},
+        )
+
     return LoginResponse(
         email=request.email,
         role=emp.get("role") if emp else None,
@@ -86,24 +106,25 @@ async def update_employee_profile(request: ProfileUpdateRequest):
     existing_resume = await get_employee_resume_data(employee_id) or {}
 
     updated = {**existing_resume}
-    if request.profile_summary is not None:
-        updated["profile_summary"] = request.profile_summary
-    if request.technical_skills is not None:
-        updated["technical_skills"] = request.technical_skills
-    if request.total_experience is not None:
-        updated["total_experience"] = request.total_experience
-    if request.personal_info is not None:
-        updated["personal_info"] = request.personal_info
-    if request.education is not None:
-        updated["education"] = request.education
-    if request.certifications is not None:
-        updated["certifications"] = request.certifications
-    if request.achievements is not None:
-        updated["achievements"] = request.achievements
-    if request.interests is not None:
-        updated["interests"] = request.interests
-    if request.work_experience is not None:
-        updated["work_experience"] = request.work_experience
+    changed_fields: dict = {}
+    for field in (
+        "profile_summary",
+        "technical_skills",
+        "total_experience",
+        "personal_info",
+        "education",
+        "certifications",
+        "achievements",
+        "interests",
+        "work_experience",
+    ):
+        new_value = getattr(request, field)
+        if new_value is not None:
+            changed_fields[field] = {
+                "before": existing_resume.get(field),
+                "after": new_value,
+            }
+            updated[field] = new_value
     logger.info(f"Updating profile for employee_id={employee_id} with data: {updated}")
 
     try:
@@ -140,6 +161,14 @@ async def update_employee_profile(request: ProfileUpdateRequest):
     upsert_result = await upsert_resume_path(employee_id, resume_path)
     logger.info(f"upsert_resume_path result for {employee_id}: {upsert_result}")
 
+    if changed_fields:
+        await write_audit_event(
+            event_type="PROFILE_UPDATED",
+            actor=employee_id,
+            employee_id=employee_id,
+            payload={"changed_fields": list(changed_fields.keys()), "diff": changed_fields},
+        )
+
     return {"status": "success", "message": "Profile updated"}
 
 
@@ -175,6 +204,7 @@ async def update_skill_summary(request: SkillSummaryUpdateRequest):
     # they are never taken from the request body, which keeps them immutable.
     employee_id = emp.get("employeeId", "")
     name = emp.get("fullName", "")
+    before = await get_employee_skill_summary(employee_id) or {}
 
     result = await upsert_employee_skill_summary(
         employee_id=employee_id,
@@ -189,6 +219,25 @@ async def update_skill_summary(request: SkillSummaryUpdateRequest):
         return result
 
     summary = await get_employee_skill_summary(employee_id)
+    await write_audit_event(
+        event_type="SKILL_PROFILE_UPDATED",
+        actor=employee_id,
+        employee_id=employee_id,
+        payload={
+            "before": {
+                "current_designation": before.get("current_designation"),
+                "current_skill": before.get("current_skill"),
+                "total_exp": before.get("total_exp"),
+                "current_skill_exp": before.get("current_skill_exp"),
+            },
+            "after": {
+                "current_designation": summary.get("current_designation") if summary else None,
+                "current_skill": summary.get("current_skill") if summary else None,
+                "total_exp": summary.get("total_exp") if summary else None,
+                "current_skill_exp": summary.get("current_skill_exp") if summary else None,
+            },
+        },
+    )
     return {"status": "success", "data": summary}
 
 
@@ -239,6 +288,12 @@ async def send_resume_invite(request: SendResumeInviteRequest):
             recipient_name=recipient_name,
             update_url=email_settings.frontend_update_url,
         )
+        await write_audit_event(
+            event_type="INVITE_SENT",
+            actor=request.actor_email or "HR",
+            employee_id=emp.get("employeeId") if emp else None,
+            payload={"invited_email": email},
+        )
         return {"status": "success", "message": f"Invite sent to {email}"}
     except Exception as e:
         logger.error(f"send_resume_invite failed for {email}: {e}")
@@ -261,17 +316,21 @@ async def skill_summary():
 
 
 @router.get("/hr/skill-employees")
-async def skill_employees(skill: str):
-    """Employees whose current_skill matches the given skill rack."""
-    data = await get_employees_by_skill(skill)
+async def skill_employees(skill: str, min_skill_exp: Optional[float] = None):
+    """Employees whose current_skill matches the given skill rack, optionally
+    filtered to those with at least min_skill_exp years in that skill."""
+    data = await get_employees_by_skill(skill, min_skill_exp)
     return {"status": "success", "skill": skill, "data": data}
 
 
 @router.get("/hr/skill-employees-excel")
-async def skill_employees_excel(skill: str):
+async def skill_employees_excel(
+    skill: str, min_skill_exp: Optional[float] = None, actor_email: Optional[str] = None
+):
     """Generates an Excel report for the employees in one skill rack
-    (e.g. clicking 'Generate Excel' on the Java rack drill-down panel)."""
-    data = await get_employees_by_skill(skill)
+    (e.g. clicking 'Generate Excel' on the Java rack drill-down panel),
+    honoring the same experience filter as the on-screen list."""
+    data = await get_employees_by_skill(skill, min_skill_exp)
     if not data:
         raise HTTPException(status_code=404, detail="No employees found for this skill")
 
@@ -296,6 +355,17 @@ async def skill_employees_excel(skill: str):
         raise HTTPException(status_code=500, detail=result.get("message", "Excel generation failed"))
 
     filename = os.path.basename(result["saved_location"])
+    await write_audit_event(
+        event_type="EXCEL_REPORT_GENERATED",
+        actor=actor_email or "HR",
+        payload={
+            "report": "skill_rack",
+            "skill": skill,
+            "min_skill_exp": min_skill_exp,
+            "employee_count": len(data),
+            "filename": filename,
+        },
+    )
     return {"status": "success", "excel_filename": filename, "count": len(data)}
 
 
@@ -307,7 +377,7 @@ async def all_employees():
 
 
 @router.get("/hr/all-employees-excel")
-async def all_employees_excel():
+async def all_employees_excel(actor_email: Optional[str] = None):
     """Generates an Excel report containing every employee in the org."""
     data = await get_full_employee_directory()
     if not data:
@@ -338,7 +408,35 @@ async def all_employees_excel():
         raise HTTPException(status_code=500, detail=result.get("message", "Excel generation failed"))
 
     filename = os.path.basename(result["saved_location"])
+    await write_audit_event(
+        event_type="EXCEL_REPORT_GENERATED",
+        actor=actor_email or "HR",
+        payload={
+            "report": "full_employee_directory",
+            "employee_count": len(data),
+            "filename": filename,
+        },
+    )
     return {"status": "success", "excel_filename": filename, "count": len(data)}
+
+
+@router.get("/hr/audit-log")
+async def audit_log(
+    event_type: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    page: int = 1,
+    page_size: int = 50,
+):
+    """Paginated, filterable audit trail for the HR Audit Log section."""
+    result = await get_audit_log(
+        event_type=event_type,
+        date_from=date_from,
+        date_to=date_to,
+        page=page,
+        page_size=page_size,
+    )
+    return {"status": "success", **result}
 
 
 @router.post("/search-candidates")
