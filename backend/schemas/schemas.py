@@ -38,7 +38,7 @@ class Education(BaseModel):
 
 class EmployeePayload(BaseModel):
     employee_id: Optional[str] = None
-    total_experience: Optional[int] = 0
+    total_experience: Optional[float] = 0
     personal_info: PersonalInfo = Field(default_factory=PersonalInfo)
     profile_summary: Optional[str] = ""
     technical_skills: Dict[str, List[str]] = Field(default_factory=dict)
@@ -134,7 +134,7 @@ class ProfileUpdateRequest(BaseModel):
     email: str
     profile_summary: Optional[str] = None
     technical_skills: Optional[Dict[str, List[str]]] = None
-    total_experience: Optional[int] = None
+    total_experience: Optional[float] = None
     personal_info: Optional[Dict[str, str]] = None
     education: Optional[List[Dict[str, Any]]] = None
     certifications: Optional[List[str]] = None

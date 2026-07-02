@@ -12,6 +12,7 @@ from tools.resume_tool import generate_resume_docx
 from tools.excel_tools import create_talent_excel
 from services.db_service import (
     get_audit_log,
+    get_all_skill_summary_employees,
     get_employee_by_email,
     get_employee_resume_data,
     get_employee_skill_summary,
@@ -25,6 +26,7 @@ from services.db_service import (
     upsert_employee_skill_summary,
     upsert_resume_path,
     write_audit_event,
+    delete_employee,
 )
 from schemas.schemas import (
     LoginRequest,
@@ -126,6 +128,22 @@ async def update_employee_profile(request: ProfileUpdateRequest):
             }
             updated[field] = new_value
     logger.info(f"Updating profile for employee_id={employee_id} with data: {updated}")
+
+    # Strip nulls and ensure required string fields are always present
+    def _replace_nulls(data):
+        if isinstance(data, dict):
+            return {k: _replace_nulls(v) if v is not None else "" for k, v in data.items()}
+        if isinstance(data, list):
+            return [_replace_nulls(i) if i is not None else "" for i in data]
+        return data
+
+    updated = _replace_nulls(updated)
+
+    # Ensure project_description is always present (may be absent in old DB docs)
+    for we in updated.get("work_experience", []):
+        proj = we.get("project")
+        if isinstance(proj, dict) and "project_description" not in proj:
+            proj["project_description"] = ""
 
     try:
         payload = EmployeePayload(**updated)
@@ -376,6 +394,14 @@ async def all_employees():
     return {"status": "success", "count": len(data), "data": data}
 
 
+@router.get("/hr/skill-summary-employees")
+async def skill_summary_employees():
+    """Employee List sourced directly from employee_skill_summary — the 6
+    skill-profile fields (no bench status) joined with resume_store."""
+    data = await get_all_skill_summary_employees()
+    return {"status": "success", "count": len(data), "data": data}
+
+
 @router.get("/hr/all-employees-excel")
 async def all_employees_excel(actor_email: Optional[str] = None):
     """Generates an Excel report containing every employee in the org."""
@@ -489,6 +515,21 @@ async def download_excel(filename: str):
         filename=safe_filename,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+@router.delete("/hr/employee/{employee_id}")
+async def delete_employee_record(employee_id: str, actor_email: Optional[str] = None):
+    """Hard-delete an employee and all their data (HR only)."""
+    result = await delete_employee(employee_id)
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail=result.get("message", "Delete failed"))
+    await write_audit_event(
+        event_type="EMPLOYEE_DELETED",
+        actor=actor_email or "HR",
+        employee_id=employee_id,
+        payload={"deleted_employee_id": employee_id},
+    )
+    return {"status": "success", "message": f"Employee {employee_id} deleted"}
 
 
 @router.post("/upload-resume")

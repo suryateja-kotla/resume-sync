@@ -28,11 +28,18 @@ class DocxTool:
                 for row in block.findall(".//" + qn("w:tr")):
                     cells = []
                     for cell in row.findall(".//" + qn("w:tc")):
-                        cell_text = "".join(
-                            n.text for n in cell.iter(qn("w:t")) if n.text
-                        )
-                        if cell_text.strip():
-                            cells.append(cell_text.strip())
+                        # Collect each paragraph inside the cell separately so
+                        # bullet-point lines are preserved as distinct lines
+                        # rather than merged into one unreadable blob.
+                        para_lines = []
+                        for para in cell.findall(".//" + qn("w:p")):
+                            para_text = "".join(
+                                n.text for n in para.iter(qn("w:t")) if n.text
+                            )
+                            if para_text.strip():
+                                para_lines.append(para_text.strip())
+                        if para_lines:
+                            cells.append("\n".join(para_lines))
                     if cells:
                         content.append(" | ".join(cells))
 

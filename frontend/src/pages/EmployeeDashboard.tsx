@@ -1024,30 +1024,43 @@ export default function EmployeeDashboard() {
                                 ) : (
                                   group.projects.map((proj, j) => {
                                     const key = `${i}-${j}`
+                                    const projLabel = proj?.name?.trim() || group.designation
+                                    const hasDetails = !!(
+                                      proj?.project_description ||
+                                      (proj?.environment && proj.environment.length > 0) ||
+                                      (proj?.responsibilities && proj.responsibilities.length > 0)
+                                    )
                                     return (
                                       <div key={j} className="border border-gray-200 rounded-xl overflow-hidden bg-white">
                                         {/* Level 3: project row */}
                                         <button
-                                          onClick={() => toggleViewProject(key)}
-                                          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition"
+                                          onClick={() => hasDetails && toggleViewProject(key)}
+                                          className={`w-full flex items-center justify-between px-4 py-3 text-left transition ${hasDetails ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'}`}
                                         >
-                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                            <span className="font-medium text-gray-700 text-xs">
-                                              {proj?.name || 'Project'}
-                                            </span>
-                                            {proj?.client && (
-                                              <span className="text-gray-400 text-xs">· {proj.client}</span>
-                                            )}
-                                            {proj?.role && (
-                                              <span className="text-gray-400 text-xs">· {proj.role}</span>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <span className="font-medium text-gray-700 text-xs">
+                                                {projLabel}
+                                              </span>
+                                              {proj?.client?.trim() && (
+                                                <span className="text-gray-400 text-xs">· {proj.client}</span>
+                                              )}
+                                              {proj?.role?.trim() && proj.role !== group.designation && (
+                                                <span className="text-gray-400 text-xs">· {proj.role}</span>
+                                              )}
+                                            </div>
+                                            {proj?.project_description && !viewOpenProjects.has(key) && (
+                                              <p className="text-gray-400 text-xs mt-0.5 truncate">{proj.project_description}</p>
                                             )}
                                           </div>
-                                          <svg
-                                            className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 flex-shrink-0 ml-3 ${viewOpenProjects.has(key) ? 'rotate-180' : ''}`}
-                                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                          >
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                          </svg>
+                                          {hasDetails && (
+                                            <svg
+                                              className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 flex-shrink-0 ml-3 ${viewOpenProjects.has(key) ? 'rotate-180' : ''}`}
+                                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                            >
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                          )}
                                         </button>
 
                                         {/* Project details */}

@@ -118,108 +118,244 @@ SKILL_SUMMARY_DATA = {
 
 # ── DOCX Parsing helpers ─────────────────────────────────────────────────────
 
-def _text(paragraphs):
-    return [p.text.strip() for p in paragraphs if p.text.strip()]
+_ROLE_KEYWORDS = (
+    "engineer", "developer", "architect", "analyst", "associate",
+    "trainee", "lead", "manager", "tester", "sdet", "test",
+)
+
+_TOP_SECTION_HEADERS = {
+    "summary", "summarry", "profile", "technical skills", "experience",
+    "education", "certifications", "skills & abilities /achievements",
+    "skills & abilities/achievements", "/achievements",
+    "activities and interests", "declaration",
+}
 
 
-def _section_text(lines, header):
-    """Return lines between 'header' and the next all-caps/title section."""
-    SECTION_HEADERS = {
-        "Summary", "Summarry", "Profile", "Technical Skills", "Experience",
-        "Education", "Certifications", "Skills & Abilities /Achievements",
-        "Skills & Abilities/Achievements", "/Achievements", "Activities and Interests",
-        "Declaration",
-    }
-    try:
-        idx = next(i for i, l in enumerate(lines) if l.strip() in {header} | {h.lower() for h in SECTION_HEADERS} and l.strip() == header)
-    except StopIteration:
-        return []
-    result = []
-    for line in lines[idx + 1:]:
-        if line.strip() in SECTION_HEADERS:
-            break
-        if line.strip():
-            result.append(line.strip())
-    return result
+def _is_role_header(text: str) -> bool:
+    """True when a paragraph looks like 'Designation | Company | Date'."""
+    m = re.match(r"^(.+?)\s*[|·]\s*(.+?)\s*[|·]\s*(.+)$", text)
+    return bool(m and any(kw in text.lower() for kw in _ROLE_KEYWORDS))
+
+
+def _parse_role_header(text: str):
+    """Return (designation, company, duration) from a role header line."""
+    m = re.match(r"^(.+?)\s*[|·]\s*(.+?)\s*[|·]\s*(.+)$", text)
+    if m:
+        return m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+    return "", "", ""
+
+
+def _is_project_table(table) -> bool:
+    """True when a table has Project/Client/Role/Environment rows."""
+    keys = {row.cells[0].text.strip().lower() for row in table.rows if row.cells}
+    return bool(keys & {"project", "product"}) and bool(keys & {"client", "role", "environment"})
+
+
+def _is_skill_table(table) -> bool:
+    rows = table.rows
+    if not rows:
+        return False
+    first_cells = [c.text.strip() for c in rows[0].cells]
+    if len(first_cells) != 2 or not first_cells[0] or not first_cells[1]:
+        return False
+    return any(
+        kw in first_cells[0].lower()
+        for kw in ("programming", "automation", "ci", "cloud", "version",
+                   "api", "operating", "tech", "backend", "frontend",
+                   "database", "framework", "tool", "management",
+                   "container", "performance", "queue", "monitor",
+                   "mobile", "test", "architecture", "stack")
+    )
 
 
 def _parse_tech_skills(doc):
     """Extract technical skills from the 2-column skill table."""
     skills = {}
     for table in doc.tables:
-        rows = table.rows
-        if not rows:
+        if not _is_skill_table(table):
             continue
-        first_cells = [c.text.strip() for c in rows[0].cells]
-        # Skill tables have exactly 2 columns; first col is category name
-        if len(first_cells) == 2 and first_cells[0] and first_cells[1]:
-            looks_like_skill_table = any(
-                kw in first_cells[0].lower()
-                for kw in ("programming", "automation", "ci", "cloud", "version",
-                           "api", "operating", "tech", "backend", "frontend",
-                           "database", "framework", "tool", "management",
-                           "container", "performance", "queue", "monitor",
-                           "mobile", "test", "architecture", "stack")
-            )
-            if looks_like_skill_table:
-                for row in rows:
-                    cells = [c.text.strip() for c in row.cells]
-                    if len(cells) == 2 and cells[0] and cells[1]:
-                        category = cells[0]
-                        vals = [v.strip() for v in re.split(r",\s*", cells[1]) if v.strip()]
-                        if vals:
-                            skills[category] = vals
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells]
+            if len(cells) == 2 and cells[0] and cells[1]:
+                vals = [v.strip() for v in re.split(r",\s*|\n", cells[1]) if v.strip()]
+                if vals:
+                    skills[cells[0]] = vals
     return skills
 
 
+def _read_project_table(table) -> dict:
+    """Return {project, client, role, environment_list} from a project table."""
+    rows_data = {}
+    for row in table.rows:
+        if not row.cells:
+            continue
+        key = row.cells[0].text.strip().lower()
+        # Join all paragraphs in the value cell with newline to preserve multi-line env lists
+        val_cell = row.cells[1] if len(row.cells) > 1 else None
+        if val_cell:
+            val = "\n".join(
+                p.text.strip() for p in val_cell.paragraphs if p.text.strip()
+            )
+            rows_data[key] = val
+
+    env_raw = rows_data.get("environment") or rows_data.get("tech stack") or ""
+    env_list = [e.strip() for e in re.split(r",\s*|\n", env_raw) if e.strip()]
+    return {
+        "project_name": rows_data.get("project") or rows_data.get("product") or "",
+        "client":       rows_data.get("client") or "Internal",
+        "role":         rows_data.get("role") or "",
+        "environment":  env_list,
+    }
+
+
 def _parse_projects(doc):
-    """Extract work experience project blocks from tables (Project/Client/Role/Environment rows)."""
+    """
+    Walk the document body in order.
+
+    The Sails resume layout is:
+        <role header paragraph>   e.g. "LEAD ENGINEER | SAILS SOFTWARE | Jan 2021–date"
+        <company paragraph>       "Company:"
+        <company description>     free text
+        <Project Details:>
+        <project description>     free text
+        <Responsibilities:>
+        <bullet paragraphs>       one responsibility per paragraph
+        <project table>           Project / Client / Role / Environment rows
+        [repeat for next role]
+
+    We collect entries keyed per role header and attach the project table +
+    responsibilities that appear between that header and the next one.
+    """
+    from docx.oxml.ns import qn
+
+    # Walk the raw XML body so paragraphs and tables stay in document order.
+    body_children = list(doc.element.body)
+
+    # ── Pass 1: segment the body into per-role blocks ──────────────────────
+    # Each block is { designation, company, duration, paragraphs[], tables[] }
+    blocks = []
+    current = None
+    in_experience = False
+
+    for child in body_children:
+        tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+
+        if tag == "p":
+            text = "".join(n.text for n in child.iter(qn("w:t")) if n.text).strip()
+            if not text:
+                continue
+
+            # Detect the "Experience" section header so we stop tracking
+            # paragraphs that belong to earlier sections.
+            if text.lower() in ("experience", "work experience"):
+                in_experience = True
+                continue
+
+            # Once we leave the experience section, stop.
+            if in_experience and text.lower() in (_TOP_SECTION_HEADERS - {"experience", "work experience"}):
+                in_experience = False
+                current = None
+                continue
+
+            if not in_experience:
+                continue
+
+            if _is_role_header(text):
+                desig, company, duration = _parse_role_header(text)
+                current = {
+                    "designation": desig,
+                    "company":     company,
+                    "duration":    duration,
+                    "paragraphs":  [],
+                    "tables":      [],
+                }
+                blocks.append(current)
+            elif current is not None:
+                current["paragraphs"].append(text)
+
+        elif tag == "tbl":
+            # Wrap in a python-docx Table object for convenience
+            from docx.table import Table
+            tbl = Table(child, doc)
+            if current is not None:
+                current["tables"].append(tbl)
+
+    # ── Pass 2: build work_experience entries from each block ───────────────
     projects = []
-    exp_paragraphs = _text(doc.paragraphs)
+    for block in blocks:
+        # Collect responsibilities: paragraphs that are NOT section labels,
+        # company blurbs, or "Project Details:" / "Responsibilities:" markers.
+        skip_prefixes = (
+            "company:", "project details:", "responsibilities:", "declaration",
+        )
+        desc_lines = []
+        resp_lines = []
+        mode = "desc"   # switch to "resp" after seeing "Responsibilities:"
 
-    # Pull current company/role from paragraphs (pattern: "Title | Company | Date")
-    designation = ""
-    duration = ""
-    company_name = ""
-    for line in exp_paragraphs:
-        m = re.match(r"^(.+?)\s*[|·]\s*(.+?)\s*[|·]\s*(.+)$", line)
-        if m and any(kw in line.lower() for kw in ("engineer", "developer", "architect",
-                                                     "analyst", "associate", "trainee",
-                                                     "lead", "manager", "tester", "sdet",
-                                                     "test")):
-            designation = m.group(1).strip()
-            company_name = m.group(2).strip()
-            duration = m.group(3).strip()
-            break  # first match = most recent role
+        for para in block["paragraphs"]:
+            low = para.lower()
+            if low.startswith("responsibilities"):
+                mode = "resp"
+                continue
+            if low.startswith("project details"):
+                mode = "desc"
+                continue
+            if any(low.startswith(pfx) for pfx in skip_prefixes):
+                continue
+            if low in _TOP_SECTION_HEADERS:
+                break
+            if mode == "resp":
+                clean = para.lstrip("•·–- ").strip()
+                if clean:
+                    resp_lines.append(clean)
+            else:
+                desc_lines.append(para)
 
-    for table in doc.tables:
-        rows_data = {}
-        for row in table.rows:
-            cells = [c.text.strip() for c in row.cells]
-            if len(cells) >= 2 and cells[0] and cells[1]:
-                rows_data[cells[0].lower()] = cells[1]
+        project_description = " ".join(desc_lines).strip()
 
-        project_key = rows_data.get("project") or rows_data.get("product")
-        client_key  = rows_data.get("client")
-        role_key    = rows_data.get("role")
-        env_key     = rows_data.get("environment") or rows_data.get("tech stack") or rows_data.get("experience")
+        # Each block can have multiple project tables (one per project).
+        # Responsibilities are shared across the role; split evenly only if
+        # there's more than one project — otherwise assign all to the single project.
+        proj_tables = [t for t in block["tables"] if _is_project_table(t)]
 
-        if project_key and (client_key or role_key):
-            env_list = [e.strip() for e in re.split(r",\s*|\n", env_key or "") if e.strip()]
+        if not proj_tables:
+            # No project table found — create a bare entry from the role header
             projects.append({
-                "company":     {"name": company_name or "Sails Software Solutions"},
-                "designation": role_key or designation or "",
-                "duration":    duration or "",
+                "company":     {"name": block["company"] or "Sails Software Solutions"},
+                "designation": block["designation"],
+                "duration":    block["duration"],
                 "project": {
-                    "name":                project_key,
-                    "client":              client_key or "Internal",
-                    "role":                role_key or "",
-                    "environment":         env_list,
-                    "project_description": "",
-                    "responsibilities":    [],
+                    "name":                "",
+                    "client":              "Internal",
+                    "role":                block["designation"],
+                    "environment":         [],
+                    "project_description": project_description,
+                    "responsibilities":    resp_lines,
                 },
             })
-    return projects, designation, duration
+            continue
+
+        for i, tbl in enumerate(proj_tables):
+            pd = _read_project_table(tbl)
+            # Assign all responsibilities to every project in this role block;
+            # that matches how Sails resumes are structured (one role = one project).
+            projects.append({
+                "company":     {"name": block["company"] or "Sails Software Solutions"},
+                "designation": block["designation"],
+                "duration":    block["duration"],
+                "project": {
+                    "name":                pd["project_name"],
+                    "client":              pd["client"],
+                    "role":                pd["role"] or block["designation"],
+                    "environment":         pd["environment"],
+                    "project_description": project_description,
+                    "responsibilities":    resp_lines,
+                },
+            })
+
+    top_designation = projects[0]["designation"] if projects else ""
+    top_duration = projects[0]["duration"] if projects else ""
+    return projects, top_designation, top_duration
 
 
 def _parse_education(doc):
@@ -274,18 +410,36 @@ def _extract_name(doc):
     return ""
 
 
+def _para_lines(doc):
+    return [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+
+
+def _lines_between(lines, header, stop_headers):
+    try:
+        idx = next(i for i, l in enumerate(lines) if l.strip() == header)
+    except StopIteration:
+        return []
+    result = []
+    for line in lines[idx + 1:]:
+        if line.strip().lower() in stop_headers:
+            break
+        if line.strip():
+            result.append(line.strip())
+    return result
+
+
 def _extract_summary(doc):
-    lines = _text(doc.paragraphs)
+    lines = _para_lines(doc)
     for header in ("Summary", "Summarry", "Profile"):
-        result = _section_text(lines, header)
+        result = _lines_between(lines, header, _TOP_SECTION_HEADERS)
         if result:
             return " ".join(result)
     return ""
 
 
 def _extract_certifications(doc):
-    lines = _text(doc.paragraphs)
-    certs = _section_text(lines, "Certifications")
+    lines = _para_lines(doc)
+    certs = _lines_between(lines, "Certifications", _TOP_SECTION_HEADERS)
     result = []
     for c in certs:
         for item in re.split(r"\n|•", c):
@@ -296,9 +450,9 @@ def _extract_certifications(doc):
 
 
 def _extract_achievements(doc):
-    lines = _text(doc.paragraphs)
+    lines = _para_lines(doc)
     for header in ("Skills & Abilities /Achievements", "Skills & Abilities/Achievements", "/Achievements"):
-        ach = _section_text(lines, header)
+        ach = _lines_between(lines, header, _TOP_SECTION_HEADERS)
         if ach:
             result = []
             for a in ach:
@@ -384,7 +538,7 @@ async def upsert_resume_data(db, employee_id: str, email: str, parsed: dict, tot
         **parsed,
         "employee_id":     employee_id,
         "email":           email,
-        "total_experience": int(total_exp),
+        "total_experience": total_exp,
         "updated_at":      datetime.now(timezone.utc),
     }
     result = await db.employee_resume_data.update_one(

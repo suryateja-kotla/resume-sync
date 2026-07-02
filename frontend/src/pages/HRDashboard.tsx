@@ -47,18 +47,15 @@ interface SkillEmployee {
   current_skill_exp: number
 }
 
-interface EmployeeDirectoryRow {
+interface SkillSummaryRow {
   employee_id: string
   name: string
   email: string
-  department?: string
-  current_role?: string
-  current_designation?: string
-  current_skill?: string
-  total_exp?: number | string
-  current_skill_exp?: number | string
-  bench_status?: string
-  resume_status?: string
+  current_designation: string
+  current_skill: string
+  total_exp: number | string
+  current_skill_exp: number | string
+  resume_path?: string
 }
 
 interface AuditEvent {
@@ -80,6 +77,7 @@ const AUDIT_EVENT_TYPES = [
   'NEW_EMPLOYEE_PROVISIONED',
   'INVITE_SENT',
   'EXCEL_REPORT_GENERATED',
+  'EMPLOYEE_DELETED',
 ]
 
 const AUDIT_EVENT_LABELS: Record<string, string> = {
@@ -92,6 +90,7 @@ const AUDIT_EVENT_LABELS: Record<string, string> = {
   NEW_EMPLOYEE_PROVISIONED: 'New Employee Provisioned',
   INVITE_SENT: 'Invite Sent',
   EXCEL_REPORT_GENERATED: 'Excel Report Generated',
+  EMPLOYEE_DELETED: 'Employee Deleted',
 }
 
 const AUDIT_EVENT_COLORS: Record<string, string> = {
@@ -101,9 +100,207 @@ const AUDIT_EVENT_COLORS: Record<string, string> = {
   SKILL_PROFILE_UPDATED: 'bg-violet-50 text-violet-700',
   RESUME_REGENERATED: 'bg-teal-50 text-teal-700',
   MONTHLY_UPDATE_SUBMITTED: 'bg-amber-50 text-amber-700',
+  EMPLOYEE_DELETED: 'bg-red-50 text-red-700',
   NEW_EMPLOYEE_PROVISIONED: 'bg-green-50 text-green-700',
   INVITE_SENT: 'bg-blue-50 text-blue-700',
   EXCEL_REPORT_GENERATED: 'bg-emerald-50 text-emerald-700',
+}
+
+// Skill-specific icon + color configuration for the rack cards
+const SKILL_META: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+  'React': {
+    bg: 'bg-cyan-50 border-cyan-200',
+    text: 'text-cyan-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M12 10.11c1.03 0 1.87.84 1.87 1.89 0 1-.84 1.85-1.87 1.85-1.03 0-1.87-.85-1.87-1.85 0-1.05.84-1.89 1.87-1.89M7.37 20c.63.38 2.01-.2 3.6-1.7-.52-.59-1.03-1.23-1.51-1.9a22.7 22.7 0 01-2.4-.36c-.51 2.14-.32 3.61.31 3.96m.71-5.74l-.29-.51c-.11.29-.22.58-.29.86.27.06.57.11.88.16l-.3-.51m6.54-.76l.81-1.5-.81-1.5c-.3-.53-.62-1-.91-1.47C13.17 9 12.6 9 12 9c-.6 0-1.17 0-1.71.03-.29.47-.61.94-.91 1.47L8.57 12l.81 1.5c.3.53.62 1 .91 1.47.54.03 1.11.03 1.71.03.6 0 1.17 0 1.71-.03.29-.47.61-.94.91-1.47M12 6.78c-.19.22-.39.45-.59.72h1.18c-.2-.27-.4-.5-.59-.72m0 10.44c.19-.22.39-.45.59-.72h-1.18c.2.27.4.5.59.72M16.62 4c-.62-.38-2 .2-3.59 1.7.52.59 1.03 1.23 1.51 1.9.82.08 1.63.2 2.4.36.51-2.14.32-3.61-.32-3.96m-.7 5.74l.29.51c.11-.29.22-.58.29-.86-.27-.06-.57-.11-.88-.16l.3.51m1.45-7.05c1.47.84 1.63 3.05 1.01 5.63 2.54.75 4.37 1.99 4.37 3.68 0 1.69-1.83 2.93-4.37 3.68.62 2.58.46 4.79-1.01 5.63-1.46.84-3.45-.12-5.37-1.95-1.92 1.83-3.91 2.79-5.38 1.95-1.46-.84-1.62-3.05-1-5.63C2.46 14.93.63 13.69.63 12c0-1.69 1.83-2.93 4.37-3.68C4.38 5.74 4.54 3.53 6 2.69c1.47-.84 3.46.12 5.38 1.95 1.92-1.83 3.91-2.79 5.37-1.95z"/>
+      </svg>
+    ),
+  },
+  'Angular': {
+    bg: 'bg-red-50 border-red-200',
+    text: 'text-red-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M9.93 12.645h4.134L11.996 7.74M11.996.009L.686 3.988l1.725 14.76 9.585 5.243 9.588-5.238L23.308 3.99 11.996.01zm7.058 18.297h-2.636l-1.42-3.501H8.995l-1.42 3.501H4.937l7.06-15.648 7.057 15.648z"/>
+      </svg>
+    ),
+  },
+  '.NET': {
+    bg: 'bg-purple-50 border-purple-200',
+    text: 'text-purple-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M24 8.77h-2.468v7.565h-1.425V8.77h-2.462V7.53H24zm-6.852 7.565h-4.821V7.53h4.68v1.24h-3.255v2.438h3.05v1.232h-3.05v2.647h3.396zm-6.708 0H8.882L4.78 9.863a2.896 2.896 0 01-.258-.51h-.036c.032.189.048.592.048 1.21v5.772H3.157V7.53h1.659l3.965 6.32c.167.261.275.442.323.54h.024c-.04-.233-.06-.629-.06-1.185V7.529h1.372zm-8.703-.693a.868.868 0 01-.869.868.868.868 0 01-.868-.868.868.868 0 01.868-.869.868.868 0 01.869.869z"/>
+      </svg>
+    ),
+  },
+  '.NET Full Stack': {
+    bg: 'bg-indigo-50 border-indigo-200',
+    text: 'text-indigo-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M24 8.77h-2.468v7.565h-1.425V8.77h-2.462V7.53H24zm-6.852 7.565h-4.821V7.53h4.68v1.24h-3.255v2.438h3.05v1.232h-3.05v2.647h3.396zm-6.708 0H8.882L4.78 9.863a2.896 2.896 0 01-.258-.51h-.036c.032.189.048.592.048 1.21v5.772H3.157V7.53h1.659l3.965 6.32c.167.261.275.442.323.54h.024c-.04-.233-.06-.629-.06-1.185V7.529h1.372zm-8.703-.693a.868.868 0 01-.869.868.868.868 0 01-.868-.868.868.868 0 01.868-.869.868.868 0 01.869.869z"/>
+      </svg>
+    ),
+  },
+  'Java': {
+    bg: 'bg-orange-50 border-orange-200',
+    text: 'text-orange-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M8.851 18.56s-.917.534.653.714c1.902.218 2.874.187 4.969-.211 0 0 .552.346 1.321.646-4.699 2.013-10.633-.118-6.943-1.149M8.276 15.933s-1.028.761.542.924c2.032.209 3.636.227 6.413-.308 0 0 .384.389.987.602-5.679 1.661-12.007.13-7.942-1.218M13.116 11.475c1.158 1.333-.304 2.533-.304 2.533s2.939-1.518 1.589-3.418c-1.261-1.772-2.228-2.652 3.007-5.688 0 .001-8.216 2.051-4.292 6.573M19.33 20.504s.679.559-.747.991c-2.712.822-11.288 1.069-13.669.033-.856-.373.75-.89 1.254-.998.527-.114.828-.093.828-.093-.953-.671-6.156 1.317-2.643 1.887 9.58 1.553 17.462-.7 14.977-1.82M9.292 13.21s-4.362 1.036-1.544 1.412c1.189.159 3.561.123 5.77-.062 1.806-.152 3.618-.477 3.618-.477s-.637.272-1.098.587c-4.429 1.165-12.986.623-10.522-.568 2.082-1.006 3.776-.892 3.776-.892M17.116 17.584c4.503-2.34 2.421-4.589.968-4.285-.355.074-.515.138-.515.138s.132-.207.385-.297c2.875-1.011 5.086 2.981-.928 4.562 0-.001.07-.062.09-.118M14.401 0s2.494 2.494-2.365 6.33c-3.896 3.077-.888 4.832-.001 6.836-2.274-2.053-3.943-3.858-2.824-5.539 1.644-2.469 6.197-3.665 5.19-7.627M9.734 23.924c4.322.277 10.959-.153 11.116-2.198 0 0-.302.775-3.572 1.391-3.688.694-8.239.613-10.937.168 0 .001.553.457 3.393.639"/>
+      </svg>
+    ),
+  },
+  'Java Full Stack': {
+    bg: 'bg-amber-50 border-amber-200',
+    text: 'text-amber-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M8.851 18.56s-.917.534.653.714c1.902.218 2.874.187 4.969-.211 0 0 .552.346 1.321.646-4.699 2.013-10.633-.118-6.943-1.149M8.276 15.933s-1.028.761.542.924c2.032.209 3.636.227 6.413-.308 0 0 .384.389.987.602-5.679 1.661-12.007.13-7.942-1.218M13.116 11.475c1.158 1.333-.304 2.533-.304 2.533s2.939-1.518 1.589-3.418c-1.261-1.772-2.228-2.652 3.007-5.688 0 .001-8.216 2.051-4.292 6.573M19.33 20.504s.679.559-.747.991c-2.712.822-11.288 1.069-13.669.033-.856-.373.75-.89 1.254-.998.527-.114.828-.093.828-.093-.953-.671-6.156 1.317-2.643 1.887 9.58 1.553 17.462-.7 14.977-1.82M9.292 13.21s-4.362 1.036-1.544 1.412c1.189.159 3.561.123 5.77-.062 1.806-.152 3.618-.477 3.618-.477s-.637.272-1.098.587c-4.429 1.165-12.986.623-10.522-.568 2.082-1.006 3.776-.892 3.776-.892M17.116 17.584c4.503-2.34 2.421-4.589.968-4.285-.355.074-.515.138-.515.138s.132-.207.385-.297c2.875-1.011 5.086 2.981-.928 4.562 0-.001.07-.062.09-.118M14.401 0s2.494 2.494-2.365 6.33c-3.896 3.077-.888 4.832-.001 6.836-2.274-2.053-3.943-3.858-2.824-5.539 1.644-2.469 6.197-3.665 5.19-7.627M9.734 23.924c4.322.277 10.959-.153 11.116-2.198 0 0-.302.775-3.572 1.391-3.688.694-8.239.613-10.937.168 0 .001.553.457 3.393.639"/>
+      </svg>
+    ),
+  },
+  'DevOps': {
+    bg: 'bg-slate-50 border-slate-200',
+    text: 'text-slate-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185v-4.79a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v4.79c0 .102.083.186.185.186m-2.954-5.43h2.118a.186.186 0 00.186-.186V.185a.186.186 0 00-.186-.185H11.03a.185.185 0 00-.185.185v5.277c0 .102.083.186.185.186m-2.248 7.595h2.118a.186.186 0 00.186-.186v-2.09a.186.186 0 00-.186-.186H8.781a.185.185 0 00-.185.185v2.09c0 .103.083.187.185.187m-2.248-2.716h2.118a.186.186 0 00.186-.186v-4.79a.186.186 0 00-.186-.186H6.533a.185.185 0 00-.185.185v4.79c0 .102.083.186.185.186M0 11.62v2.714l5.432 3.16v2.35l-4.063 2.363L0 23.095v-2.233l2.754-1.599v-1.57L0 19.257v-2.233l2.754-1.6v-.88L0 16.107v-2.233l5.432-3.16v2.716L2.754 14.99v.88l2.678 1.557v2.714l-2.678 1.556v.88l2.678 1.556v2.716L0 23.614v-2.714l2.678-1.556v-1.57L0 16.217v-2.714l5.432-3.16v2.233L2.678 14.13v2.35l2.754 1.598V20.4l-2.754 1.598V24l5.432-3.16v-2.716L4.636 16.59v-.88L7.41 14.15V11.43L0 6.87v2.233l2.754 1.597v1.57L0 13.827v2.234L5.432 19.2v-2.714l-2.678-1.557V14.07L5.432 12.5V9.785L0 6.624v2.715l2.678 1.556v1.57L0 13.95z"/>
+      </svg>
+    ),
+  },
+  'AI': {
+    bg: 'bg-violet-50 border-violet-200',
+    text: 'text-violet-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+      </svg>
+    ),
+  },
+  'Automation Testing': {
+    bg: 'bg-emerald-50 border-emerald-200',
+    text: 'text-emerald-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    ),
+  },
+  'PHP & Laravel': {
+    bg: 'bg-rose-50 border-rose-200',
+    text: 'text-rose-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+        <path d="M23.642 5.43a.364.364 0 01.014.1v5.149c0 .135-.073.26-.189.326l-4.323 2.49v4.934a.378.378 0 01-.188.326L9.93 23.949a.316.316 0 01-.066.027.292.292 0 01-.066.016.39.39 0 01-.066-.016.287.287 0 01-.065-.027L.373 18.753A.378.378 0 01.185 18.427V2.712c0-.04.005-.08.014-.119a.348.348 0 01.037-.092c.014-.03.03-.057.05-.08a.309.309 0 01.063-.063.294.294 0 01.056-.026L4.902.02a.378.378 0 01.378 0l4.498 2.6A.376.376 0 019.965 2.95v4.933l3.56-2.055V.845a.378.378 0 01.19-.326L18.2.02a.378.378 0 01.378 0l4.498 2.6a.378.378 0 01.189.327v2.484z"/>
+      </svg>
+    ),
+  },
+  'Data Engineering': {
+    bg: 'bg-teal-50 border-teal-200',
+    text: 'text-teal-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+      </svg>
+    ),
+  },
+  'Data Analysis': {
+    bg: 'bg-blue-50 border-blue-200',
+    text: 'text-blue-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+  },
+  'UI/UX': {
+    bg: 'bg-pink-50 border-pink-200',
+    text: 'text-pink-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+      </svg>
+    ),
+  },
+  'Technical Writing': {
+    bg: 'bg-gray-50 border-gray-200',
+    text: 'text-gray-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+  },
+  'BA': {
+    bg: 'bg-yellow-50 border-yellow-200',
+    text: 'text-yellow-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  'PO': {
+    bg: 'bg-lime-50 border-lime-200',
+    text: 'text-lime-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+      </svg>
+    ),
+  },
+  'IT': {
+    bg: 'bg-stone-50 border-stone-200',
+    text: 'text-stone-700',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+}
+
+const DEFAULT_SKILL_META = {
+  bg: 'bg-blue-50 border-blue-200',
+  text: 'text-blue-700',
+  icon: (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+    </svg>
+  ),
+}
+
+function getSkillMeta(skill: string) {
+  return SKILL_META[skill] ?? DEFAULT_SKILL_META
+}
+
+// Skill badge color for the employee list table
+const SKILL_BADGE: Record<string, string> = {
+  'React': 'bg-cyan-50 text-cyan-700 border border-cyan-200',
+  'Angular': 'bg-red-50 text-red-700 border border-red-200',
+  '.NET': 'bg-purple-50 text-purple-700 border border-purple-200',
+  '.NET Full Stack': 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+  'Java': 'bg-orange-50 text-orange-700 border border-orange-200',
+  'Java Full Stack': 'bg-amber-50 text-amber-700 border border-amber-200',
+  'DevOps': 'bg-slate-100 text-slate-700 border border-slate-200',
+  'AI': 'bg-violet-50 text-violet-700 border border-violet-200',
+  'Automation Testing': 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  'PHP & Laravel': 'bg-rose-50 text-rose-700 border border-rose-200',
+  'Data Engineering': 'bg-teal-50 text-teal-700 border border-teal-200',
+  'Data Analysis': 'bg-blue-50 text-blue-700 border border-blue-200',
+  'UI/UX': 'bg-pink-50 text-pink-700 border border-pink-200',
+  'Technical Writing': 'bg-gray-100 text-gray-700 border border-gray-200',
+  'BA': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  'PO': 'bg-lime-50 text-lime-700 border border-lime-200',
+  'IT': 'bg-stone-50 text-stone-700 border border-stone-200',
+}
+
+function getSkillBadgeClass(skill?: string) {
+  if (!skill) return 'bg-gray-100 text-gray-400 border border-gray-200'
+  return SKILL_BADGE[skill] ?? 'bg-blue-50 text-blue-700 border border-blue-200'
 }
 
 function CandidateCard({ candidate }: { candidate: Candidate }) {
@@ -118,9 +315,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
   return (
     <div className="relative bg-white rounded-xl p-4 border border-blue-100 shadow-[0_0_16px_4px_rgba(59,130,246,0.12)] hover:shadow-[0_0_24px_6px_rgba(59,130,246,0.22)] transition-shadow duration-300">
-      {/* subtle gradient background */}
       <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-50/60 via-white to-violet-50/40 pointer-events-none" />
-
       <div className="relative flex items-start justify-between mb-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-gray-800 truncate">{candidate.name || candidate.employee_id}</h3>
@@ -133,25 +328,14 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
           {candidate.currentRole}
         </span>
         {candidate.isOnBench && (
-            <span className="bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(16,185,129,0.3)]">
-              On Bench
-            </span>
-          )}
-      </div>
-
-      {/* <div className="relative flex flex-wrap gap-1.5">
-        {candidate.skills.slice(0, 6).map((skill, i) => {
-          const p = palettes[i % palettes.length]
-          return (
-            <span key={i} className={`${p.tag} ${p.glow} text-xs px-2.5 py-0.5 rounded-full font-medium`}>
-              {skill}
-            </span>
-          )
-        })}
-        {candidate.skills.length > 6 && (
-          <span className="text-gray-400 text-xs px-1 py-0.5">+{candidate.skills.length - 6} more</span>
+          <span className="bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(16,185,129,0.3)]">
+            On Bench
+          </span>
         )}
-      </div> */}
+      </div>
+      <div className="relative flex flex-wrap gap-1.5">
+        {palettes && null /* suppress unused warning */}
+      </div>
     </div>
   )
 }
@@ -179,8 +363,6 @@ export default function HRDashboard() {
   const [sendingInvite, setSendingInvite] = useState<string | null>(null)
   const [inviteStatus, setInviteStatus] = useState<Record<string, 'sent' | 'error'>>({})
 
-  // Manual invite form — type any Outlook email(s) and send onboarding invites,
-  // independent of whether the person already exists in the system.
   const [manualEmailInput, setManualEmailInput] = useState('')
   const [manualSending, setManualSending] = useState(false)
   const [manualResults, setManualResults] = useState<{ email: string; status: 'sent' | 'error'; message?: string }[]>([])
@@ -203,11 +385,14 @@ export default function HRDashboard() {
     { value: '8', label: '8+ yrs' },
   ]
 
-  // Employee List section
-  const [allEmployees, setAllEmployees] = useState<EmployeeDirectoryRow[]>([])
+  // Employee List section — sourced from employee_skill_summary
+  const [allEmployees, setAllEmployees] = useState<SkillSummaryRow[]>([])
   const [allEmployeesLoading, setAllEmployeesLoading] = useState(false)
   const [allEmployeesCount, setAllEmployeesCount] = useState(0)
   const [allExcelGenerating, setAllExcelGenerating] = useState(false)
+  const [employeeSearch, setEmployeeSearch] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<SkillSummaryRow | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Audit Log section
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
@@ -287,9 +472,7 @@ export default function HRDashboard() {
 
     setManualResults(results)
     setManualSending(false)
-    if (results.every(r => r.status === 'sent')) {
-      setManualEmailInput('')
-    }
+    if (results.every(r => r.status === 'sent')) setManualEmailInput('')
   }
 
   const fetchSkillRacks = async () => {
@@ -341,9 +524,7 @@ export default function HRDashboard() {
       if (skillExpFilter) params.min_skill_exp = skillExpFilter
       if (user?.email) params.actor_email = user.email
       const { data } = await api.get('/hr/skill-employees-excel', { params })
-      if (data.status === 'success' && data.excel_filename) {
-        downloadExcel(data.excel_filename)
-      }
+      if (data.status === 'success' && data.excel_filename) downloadExcel(data.excel_filename)
     } catch { /* ignore */ }
     finally { setSkillExcelGenerating(false) }
   }
@@ -351,7 +532,7 @@ export default function HRDashboard() {
   const fetchAllEmployees = async () => {
     setAllEmployeesLoading(true)
     try {
-      const { data } = await api.get('/hr/all-employees')
+      const { data } = await api.get('/hr/skill-summary-employees')
       if (data.status === 'success') {
         setAllEmployees(data.data)
         setAllEmployeesCount(data.count)
@@ -365,11 +546,37 @@ export default function HRDashboard() {
     setAllExcelGenerating(true)
     try {
       const { data } = await api.get('/hr/all-employees-excel', { params: user?.email ? { actor_email: user.email } : {} })
-      if (data.status === 'success' && data.excel_filename) {
-        downloadExcel(data.excel_filename)
-      }
+      if (data.status === 'success' && data.excel_filename) downloadExcel(data.excel_filename)
     } catch { /* ignore */ }
     finally { setAllExcelGenerating(false) }
+  }
+
+  const filteredEmployees = allEmployees.filter(emp => {
+    if (!employeeSearch.trim()) return true
+    const q = employeeSearch.toLowerCase()
+    return (
+      emp.name?.toLowerCase().includes(q) ||
+      emp.email?.toLowerCase().includes(q) ||
+      emp.employee_id?.toLowerCase().includes(q) ||
+      emp.current_skill?.toLowerCase().includes(q) ||
+      emp.current_designation?.toLowerCase().includes(q)
+    )
+  })
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    try {
+      await api.delete(`/hr/employee/${deleteTarget.employee_id}`, {
+        params: user?.email ? { actor_email: user.email } : {},
+      })
+      setAllEmployees(prev => prev.filter(e => e.employee_id !== deleteTarget.employee_id))
+      setAllEmployeesCount(prev => prev - 1)
+    } catch { /* ignore */ }
+    finally {
+      setDeleteLoading(false)
+      setDeleteTarget(null)
+    }
   }
 
   const fetchAuditLog = async (
@@ -426,8 +633,6 @@ export default function HRDashboard() {
       const candidates: Candidate[] = data.candidates || []
       const excel_filename: string | undefined = data.excel_filename || undefined
       const agent_message: string | undefined = data.message
-
-      // For text/greeting/pending_confirmation replies, show the message directly
       const isTextReply = status === 'text' || status === 'pending_confirmation'
 
       setMessages(prev =>
@@ -528,7 +733,6 @@ export default function HRDashboard() {
                   </p>
                 </div>
               </div>
-
               <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wider font-medium mb-3">Quick Searches</p>
                 <div className="space-y-1">
@@ -591,7 +795,7 @@ export default function HRDashboard() {
               {section === 'search' && 'Find talent using natural language queries'}
               {section === 'new-employees' && 'Send onboarding invites so new hires can upload their resume'}
               {section === 'skill-dashboard' && 'Click a skill rack to see which employees currently work in that stack'}
-              {section === 'employee-list' && 'Full directory of employees across the organization'}
+              {section === 'employee-list' && 'Skill profile directory — all employees from skill summary data'}
               {section === 'audit-log' && 'Track who changed what, and when, across the system'}
             </p>
           </div>
@@ -615,128 +819,117 @@ export default function HRDashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Generate Excel Report
+                  Export Excel
                 </>
               )}
             </button>
           )}
         </header>
 
+        {/* ── Candidate Search ── */}
         {section === 'search' && (
-        <>
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          {messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.type === 'assistant' && (
-                <div className="flex items-start gap-3 max-w-3xl w-full">
-                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    {msg.loading ? (
-                      <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 inline-flex items-center gap-2">
-                        <div className="flex gap-1">
-                          {[0, 1, 2].map(i => (
-                            <div
-                              key={i}
-                              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
-                              style={{ animationDelay: `${i * 0.15}s` }}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-gray-400 text-sm">Thinking...</span>
+          <>
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.type === 'assistant' && (
+                    <div className="flex items-start gap-3 max-w-3xl w-full">
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
                       </div>
-                    ) : (
-                      <>
-                        {msg.text && (
-                          <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 mb-3 text-gray-700 text-sm leading-relaxed">
-                            {msg.text}
-                          </div>
-                        )}
-                        {msg.candidates && msg.candidates.length > 0 && (
-                          <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {msg.candidates.map((c, i) => (
-                                <CandidateCard key={i} candidate={c} />
+                      <div className="flex-1">
+                        {msg.loading ? (
+                          <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 inline-flex items-center gap-2">
+                            <div className="flex gap-1">
+                              {[0, 1, 2].map(i => (
+                                <div key={i} className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                               ))}
                             </div>
-                            {msg.excel_filename && (
-                              <a
-                                href={`http://localhost:8000/api/download-excel?filename=${encodeURIComponent(msg.excel_filename)}`}
-                                download={msg.excel_filename}
-                                className="inline-flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 text-sm font-medium px-4 py-2 rounded-lg transition"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download Excel Report
-                              </a>
-                            )}
+                            <span className="text-gray-400 text-sm">Thinking...</span>
                           </div>
+                        ) : (
+                          <>
+                            {msg.text && (
+                              <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 mb-3 text-gray-700 text-sm leading-relaxed">
+                                {msg.text}
+                              </div>
+                            )}
+                            {msg.candidates && msg.candidates.length > 0 && (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {msg.candidates.map((c, i) => <CandidateCard key={i} candidate={c} />)}
+                                </div>
+                                {msg.excel_filename && (
+                                  <a
+                                    href={`http://localhost:8000/api/download-excel?filename=${encodeURIComponent(msg.excel_filename)}`}
+                                    download={msg.excel_filename}
+                                    className="inline-flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 text-sm font-medium px-4 py-2 rounded-lg transition"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                    </svg>
+                                    Download Excel Report
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </div>
+                  )}
+                  {msg.type === 'user' && (
+                    <div className="max-w-lg">
+                      <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed shadow-sm">
+                        {msg.text}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {msg.type === 'user' && (
-                <div className="max-w-lg">
-                  <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed shadow-sm">
-                    {msg.text}
-                  </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+            <div className="bg-white border-t border-gray-100 px-6 py-4 flex-shrink-0">
+              <div className="flex items-end gap-3 max-w-4xl mx-auto">
+                <div className="flex-1 relative">
+                  <textarea
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder='e.g. "Find candidates with 2+ years Java experience"'
+                    rows={1}
+                    className="w-full resize-none px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 placeholder-gray-400 text-sm leading-relaxed transition"
+                    style={{ maxHeight: '120px' }}
+                    onInput={e => {
+                      const el = e.currentTarget
+                      el.style.height = 'auto'
+                      el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+                    }}
+                  />
                 </div>
-              )}
+                <button
+                  onClick={sendMessage}
+                  disabled={!input.trim() || loading}
+                  className="flex-shrink-0 w-11 h-11 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl flex items-center justify-center transition"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-gray-400 text-xs text-center mt-2">Press Enter to send · Shift+Enter for new line</p>
             </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-
-        {/* Input area */}
-        <div className="bg-white border-t border-gray-100 px-6 py-4 flex-shrink-0">
-          <div className="flex items-end gap-3 max-w-4xl mx-auto">
-            <div className="flex-1 relative">
-              <textarea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder='e.g. "Find candidates with 2+ years Java experience"'
-                rows={1}
-                className="w-full resize-none px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 placeholder-gray-400 text-sm leading-relaxed transition"
-                style={{ maxHeight: '120px' }}
-                onInput={e => {
-                  const el = e.currentTarget
-                  el.style.height = 'auto'
-                  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
-                }}
-              />
-            </div>
-            <button
-              onClick={sendMessage}
-              disabled={!input.trim() || loading}
-              className="flex-shrink-0 w-11 h-11 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl flex items-center justify-center transition"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-          </div>
-          <p className="text-gray-400 text-xs text-center mt-2">Press Enter to send · Shift+Enter for new line</p>
-        </div>
-        </>
+          </>
         )}
 
-        {/* New Employees Section */}
+        {/* ── New Employees ── */}
         {section === 'new-employees' && (
           <div className="flex-1 overflow-y-auto px-6 py-6">
             <div className="max-w-3xl mx-auto space-y-6">
-              {/* Manual invite — type any Outlook email and send an onboarding invite */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <h2 className="text-base font-semibold text-gray-800 mb-1">Invite a New Employee</h2>
                 <p className="text-gray-400 text-sm mb-4">
@@ -777,7 +970,6 @@ export default function HRDashboard() {
                     )}
                   </button>
                 </div>
-
                 {manualResults.length > 0 && (
                   <div className="mt-4 space-y-1.5 border-t border-gray-100 pt-4">
                     {manualResults.map((r, i) => (
@@ -799,7 +991,6 @@ export default function HRDashboard() {
                 )}
               </div>
 
-              {/* Auto-detected — employees already in the system with no resume yet */}
               <div>
                 <p className="text-gray-500 text-sm font-medium mb-3">Pending in System (no resume yet)</p>
                 {newEmployeesLoading ? (
@@ -814,62 +1005,62 @@ export default function HRDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                {newEmployees.map(emp => {
-                  const status = inviteStatus[emp.email]
-                  return (
-                    <div key={emp.employee_id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0">
-                          {emp.name?.[0]?.toUpperCase() || 'E'}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-gray-800 text-sm truncate">{emp.name}</p>
-                          <p className="text-gray-500 text-xs truncate">{emp.email}</p>
-                          <p className="text-gray-400 text-xs mt-0.5">
-                            ID: {emp.employee_id}{emp.department ? ` · ${emp.department}` : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0">
-                        {status === 'sent' ? (
-                          <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-100 text-sm font-medium px-4 py-2 rounded-xl">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Invite Sent
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => sendInvite(emp.email)}
-                            disabled={sendingInvite === emp.email}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-4 py-2 rounded-xl transition flex items-center gap-2"
-                          >
-                            {sendingInvite === emp.email ? (
-                              <>
-                                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
-                                Sending...
-                              </>
-                            ) : (
-                              <>
+                    {newEmployees.map(emp => {
+                      const status = inviteStatus[emp.email]
+                      return (
+                        <div key={emp.employee_id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                              {emp.name?.[0]?.toUpperCase() || 'E'}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-gray-800 text-sm truncate">{emp.name}</p>
+                              <p className="text-gray-500 text-xs truncate">{emp.email}</p>
+                              <p className="text-gray-400 text-xs mt-0.5">
+                                ID: {emp.employee_id}{emp.department ? ` · ${emp.department}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {status === 'sent' ? (
+                              <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-100 text-sm font-medium px-4 py-2 rounded-xl">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
-                                Send Invite
-                              </>
+                                Invite Sent
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => sendInvite(emp.email)}
+                                disabled={sendingInvite === emp.email}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-4 py-2 rounded-xl transition flex items-center gap-2"
+                              >
+                                {sendingInvite === emp.email ? (
+                                  <>
+                                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                    Send Invite
+                                  </>
+                                )}
+                              </button>
                             )}
-                          </button>
-                        )}
-                        {status === 'error' && (
-                          <p className="text-red-500 text-xs mt-1.5 text-right">Failed — try again</p>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                            {status === 'error' && (
+                              <p className="text-red-500 text-xs mt-1.5 text-right">Failed — try again</p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -877,7 +1068,7 @@ export default function HRDashboard() {
           </div>
         )}
 
-        {/* Skill Dashboard Section */}
+        {/* ── Skill Dashboard ── */}
         {section === 'skill-dashboard' && (
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {skillRacksLoading ? (
@@ -893,115 +1084,232 @@ export default function HRDashboard() {
                 <p className="text-gray-400 text-sm">Skill racks populate once employees have a Skill Profile filled in.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-w-5xl mx-auto">
-                {skillRacks.map(rack => (
-                  <button
-                    key={rack.skill}
-                    onClick={() => openSkillRack(rack.skill)}
-                    className="relative bg-white rounded-2xl p-5 border border-blue-100 shadow-[0_0_16px_4px_rgba(59,130,246,0.10)] hover:shadow-[0_0_24px_6px_rgba(59,130,246,0.22)] hover:border-blue-300 transition-all text-left"
-                  >
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-50/60 via-white to-violet-50/40 pointer-events-none" />
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white mb-3">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2h0" />
-                        </svg>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-6xl mx-auto">
+                {skillRacks.map(rack => {
+                  const meta = getSkillMeta(rack.skill)
+                  const hasEmployees = rack.employee_count > 0
+                  return (
+                    <button
+                      key={rack.skill}
+                      onClick={() => hasEmployees && openSkillRack(rack.skill)}
+                      disabled={!hasEmployees}
+                      className={`group relative rounded-2xl p-5 border text-left transition-all duration-200 ${
+                        hasEmployees
+                          ? `${meta.bg} hover:shadow-lg hover:-translate-y-0.5 cursor-pointer`
+                          : 'bg-gray-50 border-gray-100 opacity-50 cursor-default'
+                      }`}
+                    >
+                      {/* icon */}
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-3 transition-transform duration-200 ${
+                        hasEmployees ? `${meta.text} bg-white shadow-sm group-hover:scale-110` : 'text-gray-400 bg-white'
+                      }`}>
+                        {meta.icon}
                       </div>
-                      <p className="font-semibold text-gray-800 text-sm truncate" title={rack.skill}>{rack.skill}</p>
-                      <p className="text-gray-400 text-xs mt-1">
-                        {rack.employee_count} employee{rack.employee_count !== 1 ? 's' : ''}
+
+                      <p className={`font-semibold text-sm leading-tight mb-1 ${hasEmployees ? 'text-gray-800' : 'text-gray-400'}`}>
+                        {rack.skill}
                       </p>
-                    </div>
-                  </button>
-                ))}
+
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-bold ${hasEmployees ? meta.text : 'text-gray-300'}`}>
+                          {rack.employee_count}
+                        </span>
+                        <span className="text-gray-400 text-xs">
+                          {rack.employee_count === 1 ? 'employee' : 'employees'}
+                        </span>
+                      </div>
+
+                      {hasEmployees && (
+                        <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${meta.text.replace('text-', 'bg-').replace('-700', '-400')}`} />
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
         )}
 
-        {/* Employee List Section */}
+        {/* ── Employee List ── */}
         {section === 'employee-list' && (
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {allEmployeesLoading ? (
               <div className="flex items-center justify-center py-24">
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                  <p className="text-gray-400 text-sm">Loading employee list...</p>
+                  <p className="text-gray-400 text-sm">Loading employees...</p>
                 </div>
               </div>
             ) : allEmployees.length === 0 ? (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center max-w-xl mx-auto">
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">No employees found</h3>
-                <p className="text-gray-400 text-sm">Employee records will show up here once they're added to the system.</p>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No skill profiles yet</h3>
+                <p className="text-gray-400 text-sm">Employees will appear here once they have filled in their Skill Profile.</p>
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-semibold text-gray-800">
-                    {allEmployeesCount} Employee{allEmployeesCount !== 1 ? 's' : ''}
-                  </h2>
+                {/* Toolbar */}
+                <div className="flex items-center justify-between mb-4 gap-4">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-base font-semibold text-gray-800 whitespace-nowrap">
+                      {filteredEmployees.length}
+                      {filteredEmployees.length !== allEmployeesCount && ` of ${allEmployeesCount}`}
+                      {' '}Employee{allEmployeesCount !== 1 ? 's' : ''}
+                    </h2>
+                  </div>
+                  {/* Search */}
+                  <div className="relative max-w-xs w-full">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                    </svg>
+                    <input
+                      type="text"
+                      value={employeeSearch}
+                      onChange={e => setEmployeeSearch(e.target.value)}
+                      placeholder="Search name, skill, email…"
+                      className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 placeholder-gray-400 bg-white"
+                    />
+                  </div>
                 </div>
+
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">ID</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Name</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Email</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Department</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Current Skill</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Total Exp</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Bench Status</th>
-                        <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Resume</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {allEmployees.map(emp => (
-                        <tr key={emp.employee_id} className="hover:bg-gray-50/60 transition">
-                          <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{emp.employee_id}</td>
-                          <td className="px-4 py-3 text-gray-800 font-medium whitespace-nowrap">{emp.name}</td>
-                          <td className="px-4 py-3 text-blue-500 whitespace-nowrap">
-                            <a href={`mailto:${emp.email}`} className="hover:underline">{emp.email}</a>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{emp.department || '—'}</td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {emp.current_skill ? (
-                              <span className="bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full">{emp.current_skill}</span>
-                            ) : <span className="text-gray-300">—</span>}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{emp.total_exp !== '' ? `${emp.total_exp} yrs` : '—'}</td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                              emp.bench_status === 'On Bench' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
-                            }`}>
-                              {emp.bench_status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                              emp.resume_status === 'Uploaded' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                            }`}>
-                              {emp.resume_status}
-                            </span>
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-left bg-gray-50/80">
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">#</th>
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Employee</th>
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Designation</th>
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Current Skill</th>
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Total Exp</th>
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Skill Exp</th>
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Resume</th>
+                          <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {filteredEmployees.map((emp, idx) => (
+                          <tr key={emp.employee_id} className="hover:bg-blue-50/30 transition-colors duration-100 group">
+                            <td className="px-5 py-3.5 text-gray-400 text-xs whitespace-nowrap">{idx + 1}</td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                  {emp.name?.[0]?.toUpperCase() || '?'}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-gray-800 truncate max-w-[160px]">{emp.name}</p>
+                                  <p className="text-gray-400 text-xs truncate max-w-[160px]">{emp.email}</p>
+                                  <p className="text-gray-300 text-xs">{emp.employee_id}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5 text-gray-600 whitespace-nowrap max-w-[180px] truncate">
+                              {emp.current_designation || <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              {emp.current_skill ? (
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getSkillBadgeClass(emp.current_skill)}`}>
+                                  {emp.current_skill}
+                                </span>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              {emp.total_exp !== '' && emp.total_exp !== undefined ? (
+                                <span className="text-gray-700 font-medium">{emp.total_exp} <span className="text-gray-400 font-normal text-xs">yrs</span></span>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              {emp.current_skill_exp !== '' && emp.current_skill_exp !== undefined ? (
+                                <span className="text-gray-700 font-medium">{emp.current_skill_exp} <span className="text-gray-400 font-normal text-xs">yrs</span></span>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              {emp.resume_path ? (
+                                <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-100 text-xs font-medium px-2.5 py-1 rounded-full">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Uploaded
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 bg-gray-50 text-gray-400 border border-gray-100 text-xs font-medium px-2.5 py-1 rounded-full">
+                                  Pending
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 whitespace-nowrap">
+                              <button
+                                onClick={() => setDeleteTarget(emp)}
+                                className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition"
+                                title="Delete employee"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {filteredEmployees.length === 0 && employeeSearch && (
+                      <div className="py-12 text-center text-gray-400 text-sm">
+                        No employees match "<span className="font-medium text-gray-600">{employeeSearch}</span>"
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             )}
           </div>
         )}
 
-        {/* Audit Log Section */}
+        {/* ── Delete Confirm Modal ── */}
+        {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-sm mx-4 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-800 text-sm">Delete Employee</h3>
+                  <p className="text-gray-400 text-xs">{deleteTarget.employee_id}</p>
+                </div>
+              </div>
+              <p className="text-gray-600 text-sm mb-1">
+                Are you sure you want to delete <span className="font-semibold text-gray-800">{deleteTarget.name}</span>?
+              </p>
+              <p className="text-gray-400 text-xs mb-6">
+                This will permanently remove their profile, resume data, skill summary, and generated DOCX. This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleteLoading}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  disabled={deleteLoading}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleteLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Audit Log ── */}
         {section === 'audit-log' && (
           <div className="flex-1 overflow-y-auto px-6 py-6">
             <div className="max-w-5xl mx-auto space-y-4">
-              {/* Filters */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap items-end gap-3">
                 <div className="flex-1 min-w-[180px]">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Event Type</label>
@@ -1032,21 +1340,14 @@ export default function HRDashboard() {
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
                   />
                 </div>
-                <button
-                  onClick={applyAuditFilters}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-                >
+                <button onClick={applyAuditFilters} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
                   Apply
                 </button>
-                <button
-                  onClick={clearAuditFilters}
-                  className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition"
-                >
+                <button onClick={clearAuditFilters} className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition">
                   Clear
                 </button>
               </div>
 
-              {/* Results */}
               {auditLoading ? (
                 <div className="flex items-center justify-center py-24">
                   <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -1072,9 +1373,7 @@ export default function HRDashboard() {
                           <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${AUDIT_EVENT_COLORS[ev.event_type] || 'bg-gray-100 text-gray-700'}`}>
                             {AUDIT_EVENT_LABELS[ev.event_type] || ev.event_type}
                           </span>
-                          <span className="text-gray-700 text-sm truncate flex-shrink-0 w-32">
-                            {ev.actor}
-                          </span>
+                          <span className="text-gray-700 text-sm truncate flex-shrink-0 w-32">{ev.actor}</span>
                           {ev.employee_id && ev.employee_id !== ev.actor && (
                             <span className="text-gray-400 text-xs truncate">→ {ev.employee_id}</span>
                           )}
@@ -1095,8 +1394,6 @@ export default function HRDashboard() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Pagination */}
                   {auditTotal > AUDIT_PAGE_SIZE && (
                     <div className="flex items-center justify-between">
                       <button
@@ -1125,18 +1422,25 @@ export default function HRDashboard() {
         )}
       </main>
 
-      {/* Skill Rack drill-down panel */}
+      {/* ── Skill Rack drill-down panel ── */}
       {selectedSkill && (
         <div className="fixed inset-0 z-20 flex justify-end">
-          <div className="absolute inset-0 bg-black/30" onClick={closeSkillRack} />
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={closeSkillRack} />
           <div className="relative w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-100 flex-shrink-0 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-800">{selectedSkill}</h2>
-                  <p className="text-gray-400 text-sm">
-                    {skillEmployees.length} employee{skillEmployees.length !== 1 ? 's' : ''} currently in this skill
-                  </p>
+            {/* Panel header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  {/* skill icon in panel */}
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${getSkillMeta(selectedSkill).text} bg-gray-50 border ${getSkillMeta(selectedSkill).bg.replace('bg-', 'border-').split(' ')[1] ?? 'border-gray-100'}`}>
+                    {getSkillMeta(selectedSkill).icon}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">{selectedSkill}</h2>
+                    <p className="text-gray-400 text-sm mt-0.5">
+                      {skillEmployeesLoading ? 'Loading…' : `${skillEmployees.length} employee${skillEmployees.length !== 1 ? 's' : ''}`}
+                    </p>
+                  </div>
                 </div>
                 <button onClick={closeSkillRack} className="text-gray-400 hover:text-gray-600 transition p-2 rounded-lg hover:bg-gray-100">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1144,79 +1448,93 @@ export default function HRDashboard() {
                   </svg>
                 </button>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-gray-500 flex-shrink-0">Filter by experience:</label>
-                <select
-                  value={skillExpFilter}
-                  onChange={e => handleSkillExpFilterChange(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
-                >
-                  {EXP_FILTER_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Filter by experience</label>
+                  <select
+                    value={skillExpFilter}
+                    onChange={e => handleSkillExpFilterChange(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+                  >
+                    {EXP_FILTER_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="pt-5">
+                  <button
+                    onClick={generateSkillExcel}
+                    disabled={skillEmployees.length === 0 || skillExcelGenerating}
+                    className="bg-green-50 hover:bg-green-100 disabled:bg-gray-50 disabled:text-gray-300 text-green-700 border border-green-200 disabled:border-gray-200 text-sm font-medium px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap"
+                  >
+                    {skillExcelGenerating ? (
+                      <>
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Generating…
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Export Excel
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={generateSkillExcel}
-                disabled={skillEmployees.length === 0 || skillExcelGenerating}
-                className="w-full bg-green-50 hover:bg-green-100 disabled:bg-gray-50 disabled:text-gray-300 text-green-700 border border-green-200 disabled:border-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2"
-              >
-                {skillExcelGenerating ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Generating Excel...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Generate Excel Report
-                  </>
-                )}
-              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            {/* Employee list inside panel */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
               {skillEmployeesLoading ? (
                 <div className="flex items-center justify-center py-24">
                   <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : skillEmployees.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-12">No employees found for this skill.</p>
+                <p className="text-gray-400 text-sm text-center py-12">No employees match this filter.</p>
               ) : (
                 <div className="space-y-3">
                   {skillEmployees.map(emp => (
-                    <div key={emp.employee_id} className="border border-gray-100 rounded-xl p-4">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="min-w-0">
+                    <div
+                      key={emp.employee_id}
+                      className="bg-gray-50 hover:bg-white border border-gray-100 hover:border-blue-100 hover:shadow-sm rounded-2xl p-4 transition-all duration-150"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                          {emp.name?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <div className="min-w-0 flex-1">
                           <p className="font-semibold text-gray-800 text-sm">{emp.name}</p>
                           <a href={`mailto:${emp.email}`} className="text-blue-500 text-xs hover:underline">{emp.email}</a>
                         </div>
-                        <span className="bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
-                          ID: {emp.employee_id}
+                        <span className="bg-white border border-gray-200 text-gray-500 text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+                          {emp.employee_id}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <p className="text-gray-400 mb-0.5">Current Designation</p>
-                          <p className="text-gray-700 font-medium">{emp.current_designation || '—'}</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white rounded-xl p-3 border border-gray-100">
+                          <p className="text-gray-400 text-xs mb-0.5">Designation</p>
+                          <p className="text-gray-700 font-medium text-sm truncate">{emp.current_designation || '—'}</p>
                         </div>
-                        <div>
-                          <p className="text-gray-400 mb-0.5">Current Skill</p>
-                          <p className="text-gray-700 font-medium">{emp.current_skill || '—'}</p>
+                        <div className="bg-white rounded-xl p-3 border border-gray-100">
+                          <p className="text-gray-400 text-xs mb-0.5">Current Skill</p>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getSkillBadgeClass(emp.current_skill)}`}>
+                            {emp.current_skill || '—'}
+                          </span>
                         </div>
-                        <div>
-                          <p className="text-gray-400 mb-0.5">Total Experience</p>
-                          <p className="text-gray-700 font-medium">{emp.total_exp} yrs</p>
+                        <div className="bg-white rounded-xl p-3 border border-gray-100">
+                          <p className="text-gray-400 text-xs mb-0.5">Total Exp</p>
+                          <p className="text-gray-700 font-medium text-sm">{emp.total_exp} <span className="text-gray-400 text-xs font-normal">yrs</span></p>
                         </div>
-                        <div>
-                          <p className="text-gray-400 mb-0.5">Current Skill Experience</p>
-                          <p className="text-gray-700 font-medium">{emp.current_skill_exp} yrs</p>
+                        <div className="bg-white rounded-xl p-3 border border-gray-100">
+                          <p className="text-gray-400 text-xs mb-0.5">Skill Exp</p>
+                          <p className="text-gray-700 font-medium text-sm">{emp.current_skill_exp} <span className="text-gray-400 text-xs font-normal">yrs</span></p>
                         </div>
                       </div>
                     </div>

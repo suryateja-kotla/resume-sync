@@ -27,6 +27,68 @@ else:
         api_key=os.getenv("GOOGLE_API_KEY"),
     )
 
+def _extract_pdf_text(file_path: str) -> str:
+    """
+    Extract text from a PDF preserving reading order for both single-column
+    and two-column layouts.
+
+    For two-column layouts (sidebar + main content): sends the main/right
+    column first (professional experience, projects, etc.) followed by the
+    sidebar sections (skills, certifications, education, etc.) clearly
+    labelled, so Gemini receives all content without interleaving.
+
+    For single-column layouts: returns full linear text unchanged.
+    """
+    import fitz
+
+    doc = fitz.open(file_path)
+    all_pages_right = []
+    all_pages_left = []
+    is_two_column = False
+
+    for page in doc:
+        page_width = page.rect.width
+        col_boundary = page_width * 0.35
+        blocks = page.get_text("blocks")  # (x0,y0,x1,y1,text,block_no,block_type)
+        text_blocks = [b for b in blocks if b[6] == 0]
+
+        left = [b for b in text_blocks if b[0] < col_boundary]
+        right = [b for b in text_blocks if b[0] >= col_boundary]
+
+        if left and right:
+            is_two_column = True
+
+        right.sort(key=lambda b: (b[1], b[0]))
+        left.sort(key=lambda b: (b[1], b[0]))
+
+        for b in right:
+            t = b[4].strip()
+            if t:
+                all_pages_right.append(t)
+        for b in left:
+            t = b[4].strip()
+            if t:
+                all_pages_left.append(t)
+
+    doc.close()
+
+    if not is_two_column:
+        # Single-column: just return full text linearly
+        doc2 = fitz.open(file_path)
+        full = "\n".join(page.get_text() for page in doc2)
+        doc2.close()
+        return full
+
+    # Two-column: main content first, then sidebar (skills/certs/education)
+    parts = []
+    if all_pages_right:
+        parts.append("\n".join(all_pages_right))
+    if all_pages_left:
+        parts.append("\n--- SIDEBAR (Skills, Certifications, Education, etc.) ---\n")
+        parts.append("\n".join(all_pages_left))
+    return "\n".join(parts)
+
+
 _docx_tool = DocxTool()
 _normalizer = ResumeNormalizer()
 _TEMPLATE_PATH = os.getenv(
@@ -55,8 +117,7 @@ async def extract_resume(
         file_extension = os.path.splitext(file_path)[1].lower()
 
         if file_extension == ".pdf":
-            with open(file_path, "rb") as f:
-                file_bytes = f.read()
+            extracted_text = _extract_pdf_text(file_path)
 
             response = client.models.generate_content(
                 model=os.getenv("MODEL", "gemini-2.5-flash"),
@@ -65,14 +126,8 @@ async def extract_resume(
                         "role": "user",
                         "parts": [
                             {
-                                "inline_data": {
-                                    "mime_type": "application/pdf",
-                                    "data": file_bytes,
-                                }
-                            },
-                            {
-                                "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}"
-                            },
+                                "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"
+                            }
                         ],
                     }
                 ],
@@ -127,6 +182,27 @@ async def extract_resume(
             return data
 
         extracted = replace_nulls_with_empty_string(extracted)
+
+        # Ensure project_description is always present (Gemini sometimes omits it)
+        for we in extracted.get("work_experience", []):
+            proj = we.get("project")
+            if isinstance(proj, dict) and "project_description" not in proj:
+                proj["project_description"] = ""
+
+        # Drop company-header duplicate entries that Gemini creates when a resume
+        # lists a company header line above each project block. Those entries have
+        # no responsibilities and project.name == designation (the fallback we set).
+        if isinstance(extracted.get("work_experience"), list):
+            def _is_header_stub(entry: dict) -> bool:
+                proj = entry.get("project", {})
+                proj_name = (proj.get("name") or "").strip()
+                designation = (entry.get("designation") or "").strip()
+                responsibilities = proj.get("responsibilities") or []
+                return proj_name == designation and len(responsibilities) == 0
+            extracted["work_experience"] = [
+                e for e in extracted["work_experience"]
+                if not _is_header_stub(e)
+            ]
 
         payload = EmployeePayload(**extracted)
         await save_employee_resume_data(

@@ -439,6 +439,59 @@ async def get_full_employee_directory() -> list[Dict[str, Any]]:
         return []
 
 
+async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
+    """Returns all records from employee_skill_summary joined with resume_store
+    for the Employee List table — no bench status, just skill profile fields."""
+    try:
+        docs = await col_employee_skill_summary.find(
+            {},
+            {
+                "_id": 0,
+                "employee_id": 1,
+                "name": 1,
+                "email": 1,
+                "current_designation": 1,
+                "current_skill": 1,
+                "total_exp": 1,
+                "current_skill_exp": 1,
+            },
+        ).sort("name", 1).to_list(length=None)
+
+        resume_paths = await _get_resume_paths_by_employee_id(
+            [d["employee_id"] for d in docs]
+        )
+        for d in docs:
+            d["resume_path"] = resume_paths.get(d["employee_id"])
+        return docs
+    except PyMongoError as e:
+        logger.error(f"get_all_skill_summary_employees error: {e}")
+        return []
+
+
+async def delete_employee(employee_id: str) -> Dict[str, Any]:
+    """Hard-delete every record for this employee across all collections
+    and remove their generated DOCX file from disk."""
+    try:
+        resume_doc = await col_resume_store.find_one({"employee_id": employee_id})
+        if resume_doc and resume_doc.get("resume_path"):
+            try:
+                abs_path = os.path.abspath(resume_doc["resume_path"])
+                if os.path.isfile(abs_path):
+                    os.remove(abs_path)
+            except Exception as e:
+                logger.warning(f"delete_employee: could not remove file for {employee_id}: {e}")
+
+        await col_employee_data.delete_one({"employeeId": employee_id})
+        await col_employee_resume_data.delete_one({"employee_id": employee_id})
+        await col_resume_store.delete_one({"employee_id": employee_id})
+        await col_employee_skill_summary.delete_one({"employee_id": employee_id})
+
+        return {"status": "success"}
+    except PyMongoError as e:
+        logger.error(f"delete_employee error for {employee_id}: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 async def write_audit_event(
     event_type: str,
     actor: str,

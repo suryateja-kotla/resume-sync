@@ -34,6 +34,7 @@ async def seed_database():
                         "NEW_EMPLOYEE_PROVISIONED",
                         "INVITE_SENT",
                         "EXCEL_REPORT_GENERATED",
+                        "EMPLOYEE_DELETED",
                     ]
                 },
                 "actor": {
@@ -109,7 +110,7 @@ async def seed_database():
                     "properties": {
                         "employee_id": {"bsonType": "string"},
                         "total_experience": {
-                            "bsonType": "int",
+                            "bsonType": ["double", "int", "decimal"],
                             "description": "Total years of experience",
                         },
                         "search_tags": {
@@ -168,7 +169,7 @@ async def seed_database():
                                                 "items": {"bsonType": "string"},
                                             },
                                             "project_description": {
-                                                "bsonType": "string"
+                                                "bsonType": ["string", "null"]
                                             },
                                             "responsibilities": {
                                                 "bsonType": "array",
@@ -211,6 +212,101 @@ async def seed_database():
 
         await db.employee_resume_data.create_index("employee_id")
         await db.employee_resume_data.create_index("search_tags")
+    else:
+        # Keep total_experience validator in sync — was int, now accepts double.
+        await db.command(
+            "collMod",
+            "employee_resume_data",
+            validator={
+                "$jsonSchema": {
+                    "bsonType": "object",
+                    "required": [
+                        "personal_info",
+                        "profile_summary",
+                        "technical_skills",
+                        "work_experience",
+                        "education",
+                    ],
+                    "properties": {
+                        "employee_id": {"bsonType": "string"},
+                        "total_experience": {
+                            "bsonType": ["double", "int", "decimal"],
+                            "description": "Total years of experience",
+                        },
+                        "search_tags": {
+                            "bsonType": "array",
+                            "items": {"bsonType": "string"},
+                        },
+                        "personal_info": {
+                            "bsonType": "object",
+                            "required": ["full_name"],
+                            "properties": {"full_name": {"bsonType": "string"}},
+                        },
+                        "profile_summary": {"bsonType": "string"},
+                        "technical_skills": {
+                            "bsonType": "object",
+                            "additionalProperties": {
+                                "bsonType": "array",
+                                "items": {"bsonType": "string"},
+                            },
+                        },
+                        "work_experience": {
+                            "bsonType": "array",
+                            "items": {
+                                "bsonType": "object",
+                                "required": ["company", "designation", "duration", "project"],
+                                "properties": {
+                                    "company": {
+                                        "bsonType": "object",
+                                        "required": ["name"],
+                                        "properties": {
+                                            "name": {"bsonType": "string"},
+                                            "description": {"bsonType": ["string", "null"]},
+                                        },
+                                    },
+                                    "designation": {"bsonType": "string"},
+                                    "duration": {"bsonType": "string"},
+                                    "project": {
+                                        "bsonType": "object",
+                                        "required": ["name", "client", "project_description"],
+                                        "properties": {
+                                            "name": {"bsonType": "string"},
+                                            "client": {"bsonType": "string"},
+                                            "role": {"bsonType": ["string", "null"]},
+                                            "environment": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                            "project_description": {"bsonType": "string"},
+                                            "responsibilities": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        "education": {
+                            "bsonType": "array",
+                            "items": {
+                                "bsonType": "object",
+                                "required": ["institution", "stream", "cgpa"],
+                                "properties": {
+                                    "year": {"bsonType": ["string", "null"]},
+                                    "institution": {"bsonType": "string"},
+                                    "stream": {"bsonType": "string"},
+                                    "cgpa": {"bsonType": ["double", "int", "decimal"]},
+                                },
+                            },
+                        },
+                        "certifications": {"bsonType": "array", "items": {"bsonType": "string"}},
+                        "achievements": {"bsonType": "array", "items": {"bsonType": "string"}},
+                        "interests": {"bsonType": "array", "items": {"bsonType": "string"}},
+                    },
+                }
+            },
+        )
 
     if "resume_store" not in existing_collections:
         await db.create_collection(
