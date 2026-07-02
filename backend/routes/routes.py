@@ -1,5 +1,4 @@
 import os
-import shutil
 import tempfile
 from datetime import datetime
 from typing import Optional
@@ -532,6 +531,27 @@ async def delete_employee_record(employee_id: str, actor_email: Optional[str] = 
     return {"status": "success", "message": f"Employee {employee_id} deleted"}
 
 
+_MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
+_ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+_MAGIC_BYTES = {
+    ".pdf": b"%PDF",
+    ".docx": b"PK\x03\x04",  # DOCX is a ZIP archive
+}
+
+
+def _validate_upload(file: UploadFile, file_bytes: bytes) -> Optional[str]:
+    """Returns an error message string if invalid, else None."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        return f"Unsupported file type '{ext}'. Only PDF and DOCX are allowed."
+    if len(file_bytes) > _MAX_UPLOAD_BYTES:
+        return f"File too large ({len(file_bytes) // (1024*1024)}MB). Maximum allowed size is 15MB."
+    expected_magic = _MAGIC_BYTES.get(ext)
+    if expected_magic and not file_bytes.startswith(expected_magic):
+        return f"File content does not match the declared type '{ext}'. Upload a valid {ext.upper()} file."
+    return None
+
+
 @router.post("/upload-resume")
 async def upload_resume(
     file: UploadFile = File(...),
@@ -542,9 +562,14 @@ async def upload_resume(
 
     file_path = None
     try:
+        file_bytes = await file.read()
+        validation_error = _validate_upload(file, file_bytes)
+        if validation_error:
+            return {"status": "error", "message": validation_error}
+
         suffix = os.path.splitext(file.filename)[1]
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            shutil.copyfileobj(file.file, tmp)
+            tmp.write(file_bytes)
             file_path = tmp.name
         response = await run_agent(
             prompt={

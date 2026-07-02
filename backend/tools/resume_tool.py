@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from google import genai
 import logging
 from tools.docx_tools import DocxTool
@@ -26,6 +27,90 @@ else:
     client = genai.Client(
         api_key=os.getenv("GOOGLE_API_KEY"),
     )
+
+def _detect_scanned_pages(file_path: str) -> list[int]:
+    """Return list of 0-based page indices that have no extractable text blocks."""
+    import fitz
+    doc = fitz.open(file_path)
+    scanned = []
+    for i, page in enumerate(doc):
+        text_blocks = [b for b in page.get_text("blocks") if b[6] == 0 and b[4].strip()]
+        if not text_blocks:
+            scanned.append(i)
+    doc.close()
+    return scanned
+
+
+def _render_page_as_image_part(file_path: str, page_index: int) -> dict:
+    """Render a single PDF page as a PNG and return a Gemini inline_data part."""
+    import fitz
+    import base64
+    doc = fitz.open(file_path)
+    page = doc[page_index]
+    pix = page.get_pixmap(dpi=150)
+    img_bytes = pix.tobytes("png")
+    doc.close()
+    return {
+        "inline_data": {
+            "mime_type": "image/png",
+            "data": base64.b64encode(img_bytes).decode("utf-8"),
+        }
+    }
+
+
+def _build_pdf_contents(file_path: str, employee_id: str) -> list:
+    """
+    Build Gemini content parts for a PDF.
+    - Text pages: extracted as structured text (existing flow).
+    - Scanned/image pages: rendered as PNG and sent via vision.
+    Returns a list of parts for the Gemini message.
+    """
+    import fitz
+
+    scanned_pages = _detect_scanned_pages(file_path)
+    doc = fitz.open(file_path)
+    total_pages = doc.page_count
+    doc.close()
+
+    parts = []
+
+    if not scanned_pages:
+        # All pages have text — use existing text extraction flow entirely
+        extracted_text = _extract_pdf_text(file_path)
+        parts.append({
+            "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"
+        })
+        return parts
+
+    # Mixed or fully scanned — build per-page parts
+    text_page_indices = [i for i in range(total_pages) if i not in scanned_pages]
+
+    if text_page_indices:
+        # Extract text only from text pages
+        import fitz as fitz2
+        doc2 = fitz2.open(file_path)
+        text_parts = []
+        for i in text_page_indices:
+            page_text = doc2[i].get_text().strip()
+            if page_text:
+                text_parts.append(f"[Page {i+1}]\n{page_text}")
+        doc2.close()
+        if text_parts:
+            parts.append({
+                "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text (text pages):\n" + "\n\n".join(text_parts)
+            })
+    else:
+        # Fully scanned — instruction goes as first text part
+        parts.append({
+            "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nThis resume is image-based. Extract all information from the page images below:"
+        })
+
+    # Append scanned pages as images
+    for page_index in scanned_pages:
+        parts.append(_render_page_as_image_part(file_path, page_index))
+
+    return parts
+
 
 def _extract_pdf_text(file_path: str) -> str:
     """
@@ -89,6 +174,44 @@ def _extract_pdf_text(file_path: str) -> str:
     return "\n".join(parts)
 
 
+_GEMINI_TIMEOUT = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "60"))
+_GEMINI_MAX_RETRIES = int(os.getenv("GEMINI_MAX_RETRIES", "3"))
+
+
+async def _call_gemini_with_retry(contents: list) -> str:
+    """
+    Call Gemini asynchronously with timeout and retry logic.
+    - Uses client.aio.models.generate_content (true async, no thread pool).
+    - Retries up to _GEMINI_MAX_RETRIES times on timeout or transient errors.
+    - Each attempt has a _GEMINI_TIMEOUT second deadline.
+    - Raises the last exception if all attempts fail.
+    """
+    last_error = None
+    for attempt in range(1, _GEMINI_MAX_RETRIES + 1):
+        try:
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=os.getenv("MODEL", "gemini-2.5-flash"),
+                    contents=contents,
+                ),
+                timeout=_GEMINI_TIMEOUT,
+            )
+            return response.text
+        except asyncio.TimeoutError:
+            last_error = f"Gemini timed out after {_GEMINI_TIMEOUT}s (attempt {attempt}/{_GEMINI_MAX_RETRIES})"
+            logger.warning(last_error)
+        except Exception as e:
+            err_str = str(e)
+            last_error = f"Gemini error on attempt {attempt}/{_GEMINI_MAX_RETRIES}: {err_str}"
+            logger.warning(last_error)
+            # Don't retry on quota/auth errors — they won't recover
+            if any(code in err_str for code in ("PERMISSION_DENIED", "INVALID_ARGUMENT", "API_KEY")):
+                raise
+        if attempt < _GEMINI_MAX_RETRIES:
+            await asyncio.sleep(2 ** attempt)  # exponential backoff: 2s, 4s
+    raise RuntimeError(f"Gemini failed after {_GEMINI_MAX_RETRIES} attempts. Last error: {last_error}")
+
+
 _docx_tool = DocxTool()
 _normalizer = ResumeNormalizer()
 _TEMPLATE_PATH = os.getenv(
@@ -117,38 +240,17 @@ async def extract_resume(
         file_extension = os.path.splitext(file_path)[1].lower()
 
         if file_extension == ".pdf":
-            extracted_text = _extract_pdf_text(file_path)
-
-            response = client.models.generate_content(
-                model=os.getenv("MODEL", "gemini-2.5-flash"),
-                contents=[
-                    {
-                        "role": "user",
-                        "parts": [
-                            {
-                                "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"
-                            }
-                        ],
-                    }
-                ],
-            )
+            pdf_parts = _build_pdf_contents(file_path, employee_id)
+            raw_text = await _call_gemini_with_retry([{"role": "user", "parts": pdf_parts}])
 
         elif file_extension == ".docx":
             extracted_text = _docx_tool.parse_docx_bytes(file_path)
-
-            response = client.models.generate_content(
-                model=os.getenv("MODEL", "gemini-2.5-flash"),
-                contents=[
-                    {
-                        "role": "user",
-                        "parts": [
-                            {
-                                "text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"
-                            }
-                        ],
-                    }
-                ],
-            )
+            raw_text = await _call_gemini_with_retry([
+                {
+                    "role": "user",
+                    "parts": [{"text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"}],
+                }
+            ])
 
         else:
             return {
@@ -156,7 +258,7 @@ async def extract_resume(
                 "message": f"Unsupported file type: {file_extension}",
             }
 
-        raw_text = response.text.strip()
+        raw_text = raw_text.strip()
 
         if raw_text.startswith("```"):
             raw_text = raw_text.split("```")[1]
