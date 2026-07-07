@@ -12,11 +12,13 @@ from tools.excel_tools import create_talent_excel
 from services.db_service import (
     get_audit_log,
     get_all_skill_summary_employees,
+    get_bench_employees,
     get_employee_by_email,
     get_employee_resume_data,
     get_employee_skill_summary,
     get_employees_by_skill,
     get_full_employee_directory,
+    get_hr_metrics,
     get_new_employees,
     get_resume_path,
     get_skill_rack_summary,
@@ -231,6 +233,9 @@ async def update_skill_summary(request: SkillSummaryUpdateRequest):
         current_skill=request.current_skill,
         total_exp=request.total_exp,
         current_skill_exp=request.current_skill_exp,
+        primary_skill=request.primary_skill,
+        secondary_skill=request.secondary_skill,
+        is_on_bench=request.is_on_bench,
     )
     if result.get("status") != "success":
         return result
@@ -317,6 +322,13 @@ async def send_resume_invite(request: SendResumeInviteRequest):
         return {"status": "error", "message": "Failed to send invite email"}
 
 
+@router.get("/hr/metrics")
+async def hr_metrics():
+    """Live metrics for the HR Monitoring dashboard — coverage, activity, skill distribution."""
+    data = await get_hr_metrics()
+    return {"status": "success", "data": data}
+
+
 @router.get("/skill-categories")
 async def list_skill_categories():
     """The fixed list of canonical skill categories used by the Skill
@@ -390,6 +402,13 @@ async def skill_employees_excel(
 async def all_employees():
     """Full org-wide employee directory for the HR Employee List section."""
     data = await get_full_employee_directory()
+    return {"status": "success", "count": len(data), "data": data}
+
+
+@router.get("/hr/bench-employees")
+async def bench_employees():
+    """Employees who have marked themselves as currently on bench."""
+    data = await get_bench_employees()
     return {"status": "success", "count": len(data), "data": data}
 
 

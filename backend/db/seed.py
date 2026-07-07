@@ -54,16 +54,25 @@ async def seed_database():
         }
     }
 
+    _AUDIT_TTL_DAYS = int(os.getenv("AUDIT_TTL_DAYS", "15"))
+    _AUDIT_TTL_SECONDS = _AUDIT_TTL_DAYS * 24 * 3600
+
     if "audit_data" not in existing_collections:
         await db.create_collection("audit_data", validator=audit_data_validator)
-        await db.audit_data.create_index("timestamp")
+        await db.audit_data.create_index(
+            "timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS
+        )
         await db.audit_data.create_index("event_type")
         await db.audit_data.create_index("actor")
     else:
-        # Keep the validator in sync for databases seeded before the audit
-        # logging event types/shape above were introduced.
-        await db.command(
-            "collMod", "audit_data", validator=audit_data_validator
+        await db.command("collMod", "audit_data", validator=audit_data_validator)
+        # Drop existing TTL index if present, then recreate with current TTL value
+        try:
+            await db.command("dropIndexes", "audit_data", index="timestamp_1")
+        except Exception:
+            pass  # index didn't exist yet — that's fine
+        await db.audit_data.create_index(
+            "timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS
         )
 
     if "employee_data" not in existing_collections:
@@ -325,10 +334,27 @@ async def seed_database():
         )
 
     logger.info("Database and collections are set up successfully.")
-    # Check if already seeded
-    existing = await db.employee_data.find_one({"employeeId": "EMP001"})
-    if not existing:
-        # HR USER
+
+    # Unique indexes — drop existing non-unique versions first, then recreate
+    for col_name, field in [
+        ("employee_data", "employeeId"),
+        ("employee_data", "email"),
+        ("employee_skill_summary", "employee_id"),
+        ("employee_resume_data", "employee_id"),
+        ("resume_store", "employee_id"),
+    ]:
+        col = db[col_name]
+        index_name = f"{field}_1"
+        try:
+            await col.drop_index(index_name)
+        except Exception:
+            pass  # index didn't exist — fine
+        await col.create_index(field, unique=True, background=True)
+    logger.info("Unique indexes ensured on all collections.")
+
+    # Seed HR user only if not already present
+    hr_exists = await db.employee_data.find_one({"employeeId": "HR001"})
+    if not hr_exists:
         await db.employee_data.insert_one(
             {
                 "employeeId": "HR001",
@@ -342,203 +368,6 @@ async def seed_database():
                 "lastProfileUpdate": datetime.now(timezone.utc),
             }
         )
-
-        # EMPLOYEE USER
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP001",
-                "fullName": "Kavya Namballa",
-                "email": "kavya.namballa@sailssoftware.com",
-                "currentRole": "Software Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP002",
-                "fullName": "Pavan Kumar",
-                "email": "pavankumar.yele@sailssoftware.com",
-                "currentRole": "senior Qa Automation Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP003",
-                "fullName": "Sai Spandana",
-                "email": "saispandana.Komati@sailssoftware.com",
-                "currentRole": "Senior QA Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP004",
-                "fullName": "karthik kumar",
-                "email": "karthikkumar.Malapati@sailssoftware.com",
-                "currentRole": "Test Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP005",
-                "fullName": "Subramanyam Kanithi",
-                "email": "subramanyam.kanithi@sailssoftware.com",
-                "currentRole": "Software Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP006",
-                "fullName": "Prathyusha Bobbala",
-                "email": "prathyusha.bobbala@sailssoftware.com",
-                "currentRole": ".net Developer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP007",
-                "fullName": "ThilaKavathi Dommaraju",
-                "email": "thilakavathi.dommaraju@sailssoftware.com",
-                "currentRole": ".net Developer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP008",
-                "fullName": "Rajarshee Roy",
-                "email": "rajarshee.roy@sailssoftware.com",
-                "currentRole": "SoftwareEngineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP009",
-                "fullName": "kiran kumar Avk ",
-                "email": "kirankumar.avk@sailssoftware.com",
-                "currentRole": "Full Stack Developer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP010",
-                "fullName": "SaiPreethi Abbireddy",
-                "email": "saipreethi.abbireddy@sailssoftware.com",
-                "currentRole": "Software Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP011",
-                "fullName": "UdayGanesh Kanteti",
-                "email": "udayganesh.kanteti@sailssoftware.com",
-                "currentRole": "SoftwareEngineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP012",
-                "fullName": "Madhuri Taddi",
-                "email": "madhuri.taddi@sailssoftware.com",
-                "currentRole": "Software Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP013",
-                "fullName": "Siva Sai Manikanta",
-                "email": "sivasai@sailssoftware.com",
-                "currentRole": "Software Engineer",
-                "department": "Engineering",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        await db.employee_data.insert_one(
-            {
-                "employeeId": "EMP014",
-                "fullName": "Jayasree Maddi",
-                "email": "jayasree.maddi@sailssoftware.com",
-                "currentRole": "Technical Delivery Manager",
-                "department": "Delivery",
-                "status": "Active",
-                "role": "EMPLOYEE",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
-            }
-        )
-
-        logger.info("Seed data inserted successfully.")
+        logger.info("HR seed record inserted.")
     else:
         logger.info("Seed data already exists, skipping...")

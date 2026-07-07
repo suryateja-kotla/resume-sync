@@ -153,6 +153,9 @@ class SkillSummaryUpdateRequest(BaseModel):
     current_skill: Optional[str] = None
     total_exp: Optional[float] = None
     current_skill_exp: Optional[float] = None
+    primary_skill: Optional[str] = None
+    secondary_skill: Optional[str] = None
+    is_on_bench: Optional[bool] = None
 
 
 # HR — onboarding invite

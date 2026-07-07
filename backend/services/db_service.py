@@ -34,26 +34,39 @@ async def get_employee_by_email(email: str) -> Optional[Dict[str, Any]]:
 
 
 async def provision_new_employee(email: str) -> Optional[Dict[str, Any]]:
-    """Auto-creates a minimal employee_data record the first time someone
-    logs in with an email that isn't in the system yet — e.g. a new hire who
-    received an HR onboarding invite. They land with role=EMPLOYEE and no
-    resume data, so the dashboard shows them straight to Upload Resume."""
+    """Auto-creates employee_data + employee_skill_summary records the first
+    time someone logs in with an email not yet in the system.
+    Uses SS-based IDs derived from employee_skill_summary if the email matches,
+    otherwise generates a temporary PROV-prefixed ID until HR assigns an SS ID."""
     try:
         local_part = email.split("@")[0]
         guessed_name = local_part.replace(".", " ").replace("_", " ").title() or email
 
-        last = await col_employee_data.find(
-            {"employeeId": {"$regex": "^EMP\\d+$"}},
-            {"_id": 0, "employeeId": 1},
-        ).sort("employeeId", -1).to_list(length=1)
-        next_num = 1
-        if last:
-            try:
-                next_num = int(last[0]["employeeId"].replace("EMP", "")) + 1
-            except ValueError:
-                next_num = 1
-        employee_id = f"EMP{next_num:03d}"
+        # Check if this email already has an SS record in skill_summary
+        ss_doc = await col_employee_skill_summary.find_one(
+            {"email": {"$regex": f"^{email}$", "$options": "i"}},
+            {"_id": 0, "employee_id": 1, "name": 1},
+        )
 
+        if ss_doc:
+            # Use the existing SS ID from skill_summary
+            employee_id = ss_doc["employee_id"]
+            guessed_name = ss_doc.get("name", guessed_name)
+        else:
+            # Generate a provisional ID — HR must assign real SS ID later
+            last = await col_employee_data.find(
+                {"employeeId": {"$regex": "^PROV\\d+$"}},
+                {"_id": 0, "employeeId": 1},
+            ).sort("employeeId", -1).to_list(length=1)
+            next_num = 1
+            if last:
+                try:
+                    next_num = int(last[0]["employeeId"].replace("PROV", "")) + 1
+                except ValueError:
+                    next_num = 1
+            employee_id = f"PROV{next_num:03d}"
+
+        now = datetime.now(timezone.utc)
         doc = {
             "employeeId": employee_id,
             "fullName": guessed_name,
@@ -63,10 +76,33 @@ async def provision_new_employee(email: str) -> Optional[Dict[str, Any]]:
             "status": "Active",
             "role": "EMPLOYEE",
             "isOnBench": False,
-            "lastProfileUpdate": datetime.now(timezone.utc),
+            "lastProfileUpdate": now,
         }
         await col_employee_data.insert_one(doc)
         doc.pop("_id", None)
+
+        # Seed a blank skill_summary entry if one doesn't exist yet
+        existing_ss = await col_employee_skill_summary.find_one({"employee_id": employee_id})
+        if not existing_ss:
+            await col_employee_skill_summary.update_one(
+                {"employee_id": employee_id},
+                {"$setOnInsert": {
+                    "employee_id": employee_id,
+                    "name": guessed_name,
+                    "email": email,
+                    "current_designation": "",
+                    "current_skill": "",
+                    "primary_skill": "",
+                    "secondary_skill": "",
+                    "total_exp": 0.0,
+                    "current_skill_exp": 0.0,
+                    "is_on_bench": False,
+                    "skill_history": [],
+                    "updated_at": now,
+                }},
+                upsert=True,
+            )
+
         return doc
     except PyMongoError as e:
         logger.error(f"provision_new_employee error for {email}: {e}")
@@ -233,38 +269,65 @@ async def upsert_employee_skill_summary(
     current_skill: Optional[str] = None,
     total_exp: Optional[float] = None,
     current_skill_exp: Optional[float] = None,
+    primary_skill: Optional[str] = None,
+    secondary_skill: Optional[str] = None,
+    is_on_bench: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """employee_id and name are always set from the authenticated employee
     record, never from client input, so they cannot be edited via the API.
-    Missing editable fields fall back to existing stored values (or safe
-    defaults on first insert) so the collection's required-fields schema
-    validator is always satisfied."""
+    When current_skill changes, the previous skill is automatically pushed
+    into skill_history[] with a timestamp so the transition is preserved."""
     try:
         existing = await col_employee_skill_summary.find_one(
             {"employee_id": employee_id}
         ) or {}
+
+        new_skill = normalize_skill(current_skill) if current_skill is not None else existing.get("current_skill", "")
+        old_skill = existing.get("current_skill", "")
+        old_skill_exp = existing.get("current_skill_exp", 0)
+        skill_history = existing.get("skill_history", [])
+
+        # If skill changed and there was a previous skill, push it to history
+        if old_skill and new_skill and old_skill != new_skill:
+            skill_history = skill_history + [{
+                "skill": old_skill,
+                "skill_exp": old_skill_exp,
+                "designation": existing.get("current_designation", ""),
+                "from": existing.get("skill_started_at", existing.get("updated_at", datetime.now(timezone.utc))),
+                "to": datetime.now(timezone.utc),
+            }]
 
         update_fields: Dict[str, Any] = {
             "employee_id": employee_id,
             "name": name,
             "email": email if email is not None else existing.get("email"),
             "current_designation": (
-                current_designation
-                if current_designation is not None
+                current_designation if current_designation is not None
                 else existing.get("current_designation", "")
             ),
-            "current_skill": (
-                normalize_skill(current_skill)
-                if current_skill is not None
-                else existing.get("current_skill", "")
-            ),
-            "total_exp": (
-                total_exp if total_exp is not None else existing.get("total_exp", 0)
-            ),
+            "current_skill": new_skill,
+            "total_exp": total_exp if total_exp is not None else existing.get("total_exp", 0),
             "current_skill_exp": (
-                current_skill_exp
-                if current_skill_exp is not None
+                current_skill_exp if current_skill_exp is not None
                 else existing.get("current_skill_exp", 0)
+            ),
+            "primary_skill": (
+                primary_skill if primary_skill is not None
+                else existing.get("primary_skill", "")
+            ),
+            "secondary_skill": (
+                secondary_skill if secondary_skill is not None
+                else existing.get("secondary_skill", "")
+            ),
+            "is_on_bench": (
+                is_on_bench if is_on_bench is not None
+                else existing.get("is_on_bench", False)
+            ),
+            "skill_history": skill_history,
+            # Reset skill_started_at when skill changes, keep existing if not
+            "skill_started_at": (
+                datetime.now(timezone.utc) if (old_skill and new_skill and old_skill != new_skill)
+                else existing.get("skill_started_at", datetime.now(timezone.utc))
             ),
             "updated_at": datetime.now(timezone.utc),
         }
@@ -351,6 +414,8 @@ async def get_employees_by_skill(
                 "current_skill": 1,
                 "total_exp": 1,
                 "current_skill_exp": 1,
+                "primary_skill": 1,
+                "secondary_skill": 1,
             },
         )
         results = []
@@ -455,16 +520,42 @@ async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
                 "total_exp": 1,
                 "current_skill_exp": 1,
             },
-        ).sort("name", 1).to_list(length=None)
+        ).sort("employee_id", 1).to_list(length=None)
 
         resume_paths = await _get_resume_paths_by_employee_id(
             [d["employee_id"] for d in docs]
         )
         for d in docs:
-            d["resume_path"] = resume_paths.get(d["employee_id"])
+            path = resume_paths.get(d["employee_id"])
+            d["resume_path"] = path
+            d["resume_status"] = "Uploaded" if path else "Pending"
         return docs
     except PyMongoError as e:
         logger.error(f"get_all_skill_summary_employees error: {e}")
+        return []
+
+
+async def get_bench_employees() -> list[Dict[str, Any]]:
+    """Returns all employees in employee_skill_summary where is_on_bench=True."""
+    try:
+        docs = await col_employee_skill_summary.find(
+            {"is_on_bench": True},
+            {
+                "_id": 0,
+                "employee_id": 1,
+                "name": 1,
+                "email": 1,
+                "current_designation": 1,
+                "current_skill": 1,
+                "total_exp": 1,
+                "current_skill_exp": 1,
+                "primary_skill": 1,
+                "secondary_skill": 1,
+            },
+        ).sort("employee_id", 1).to_list(length=None)
+        return docs
+    except PyMongoError as e:
+        logger.error(f"get_bench_employees error: {e}")
         return []
 
 
@@ -485,6 +576,7 @@ async def delete_employee(employee_id: str) -> Dict[str, Any]:
         await col_employee_resume_data.delete_one({"employee_id": employee_id})
         await col_resume_store.delete_one({"employee_id": employee_id})
         await col_employee_skill_summary.delete_one({"employee_id": employee_id})
+        await col_audit_data.delete_many({"employeeId": employee_id})
 
         return {"status": "success"}
     except PyMongoError as e:
@@ -513,6 +605,72 @@ async def write_audit_event(
         )
     except PyMongoError as e:
         logger.error(f"write_audit_event error ({event_type}, actor={actor}): {e}")
+
+
+async def get_hr_metrics() -> Dict[str, Any]:
+    """Live metrics for the HR Monitoring dashboard."""
+    try:
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        last_7  = now - timedelta(days=7)
+        last_30 = now - timedelta(days=30)
+
+        total_employees   = await col_employee_skill_summary.count_documents({})
+        total_with_resume = await col_employee_resume_data.count_documents({})
+        pending_resumes   = total_employees - total_with_resume
+        coverage_pct      = round((total_with_resume / total_employees * 100) if total_employees else 0, 1)
+
+        bench_count = await col_employee_skill_summary.count_documents({"is_on_bench": True})
+
+        # Skill distribution
+        pipeline = [
+            {"$match": {"current_skill": {"$exists": True, "$ne": ""}}},
+            {"$group": {"_id": "$current_skill", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 12},
+        ]
+        skill_dist_raw = await col_employee_skill_summary.aggregate(pipeline).to_list(length=None)
+        skill_distribution = [{"skill": d["_id"], "count": d["count"]} for d in skill_dist_raw]
+
+        # Recent activity (last 7 days)
+        uploads_7d  = await col_audit_data.count_documents({"event_type": "RESUME_UPLOAD",   "timestamp": {"$gte": last_7}})
+        updates_7d  = await col_audit_data.count_documents({"event_type": "PROFILE_UPDATED", "timestamp": {"$gte": last_7}})
+        invites_7d  = await col_audit_data.count_documents({"event_type": "INVITE_SENT",     "timestamp": {"$gte": last_7}})
+        uploads_30d = await col_audit_data.count_documents({"event_type": "RESUME_UPLOAD",   "timestamp": {"$gte": last_30}})
+
+        # Last 8 recent events for activity feed
+        feed_cursor = col_audit_data.find(
+            {"event_type": {"$in": ["RESUME_UPLOAD", "PROFILE_UPDATED", "INVITE_SENT", "SKILL_PROFILE_UPDATED"]}},
+        ).sort("timestamp", -1).limit(8)
+        recent_feed = []
+        async for doc in feed_cursor:
+            recent_feed.append({
+                "event_type": doc.get("event_type"),
+                "actor":      doc.get("actor"),
+                "employee_id": doc.get("employee_id"),
+                "timestamp":  doc["timestamp"].isoformat() if doc.get("timestamp") else None,
+            })
+
+        return {
+            "overview": {
+                "total_employees":   total_employees,
+                "total_with_resume": total_with_resume,
+                "pending_resumes":   pending_resumes,
+                "coverage_pct":      coverage_pct,
+                "bench_count":       bench_count,
+            },
+            "activity": {
+                "uploads_last_7d":  uploads_7d,
+                "updates_last_7d":  updates_7d,
+                "invites_last_7d":  invites_7d,
+                "uploads_last_30d": uploads_30d,
+            },
+            "skill_distribution": skill_distribution,
+            "recent_feed": recent_feed,
+        }
+    except PyMongoError as e:
+        logger.error(f"get_hr_metrics error: {e}")
+        return {}
 
 
 async def get_audit_log(

@@ -26,6 +26,7 @@ SKILL_CATEGORIES = [
     ".NET Full Stack",
     "Data Analysis",
     "BA",
+    "Other",
 ]
 
 # Ordered (canonical_label, [keyword triggers]); first rule that matches wins.
@@ -65,7 +66,7 @@ def normalize_skill(raw: str) -> str:
     catch-all category — if nothing matches.
     """
     if not raw or not raw.strip():
-        return "IT"
+        return "Other"
 
     cleaned = raw.strip()
 
@@ -80,4 +81,4 @@ def normalize_skill(raw: str) -> str:
         if any(kw in lowered for kw in keywords):
             return label
 
-    return "IT"
+    return "Other"

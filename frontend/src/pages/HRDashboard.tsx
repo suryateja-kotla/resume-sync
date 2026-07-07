@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 
-type Section = 'search' | 'new-employees' | 'skill-dashboard' | 'employee-list' | 'audit-log'
+type Section = 'search' | 'new-employees' | 'skill-dashboard' | 'employee-list' | 'talent-pool' | 'audit-log' | 'metrics'
 
 interface Candidate {
   employee_id: string
@@ -45,6 +45,8 @@ interface SkillEmployee {
   current_skill: string
   total_exp: number
   current_skill_exp: number
+  primary_skill?: string
+  secondary_skill?: string
 }
 
 interface SkillSummaryRow {
@@ -261,6 +263,15 @@ const SKILL_META: Record<string, { bg: string; text: string; icon: React.ReactNo
       </svg>
     ),
   },
+  'Other': {
+    bg: 'bg-gray-50 border-gray-200',
+    text: 'text-gray-600',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+      </svg>
+    ),
+  },
 }
 
 const DEFAULT_SKILL_META = {
@@ -296,6 +307,7 @@ const SKILL_BADGE: Record<string, string> = {
   'BA': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
   'PO': 'bg-lime-50 text-lime-700 border border-lime-200',
   'IT': 'bg-stone-50 text-stone-700 border border-stone-200',
+  'Other': 'bg-gray-100 text-gray-600 border border-gray-200',
 }
 
 function getSkillBadgeClass(skill?: string) {
@@ -394,6 +406,20 @@ export default function HRDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<SkillSummaryRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
+  // Talent Pool section
+  const [benchEmployees, setBenchEmployees] = useState<SkillEmployee[]>([])
+  const [benchLoading, setBenchLoading] = useState(false)
+
+  // Metrics section
+  interface HRMetrics {
+    overview: { total_employees: number; total_with_resume: number; pending_resumes: number; coverage_pct: number; bench_count: number }
+    activity: { uploads_last_7d: number; updates_last_7d: number; invites_last_7d: number; uploads_last_30d: number }
+    skill_distribution: { skill: string; count: number }[]
+    recent_feed: { event_type: string; actor: string; employee_id: string | null; timestamp: string }[]
+  }
+  const [metrics, setMetrics] = useState<HRMetrics | null>(null)
+  const [metricsLoading, setMetricsLoading] = useState(false)
+
   // Audit Log section
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
@@ -410,10 +436,17 @@ export default function HRDashboard() {
   }, [messages])
 
   useEffect(() => {
-    if (section === 'new-employees') fetchNewEmployees()
-    if (section === 'skill-dashboard') fetchSkillRacks()
-    if (section === 'employee-list') fetchAllEmployees()
-    if (section === 'audit-log') fetchAuditLog(1)
+    // Fetch bench count on mount so sidebar badge is visible immediately
+    fetchBenchEmployees()
+  }, [])
+
+  useEffect(() => {
+    if (section === 'new-employees' && newEmployees.length === 0) fetchNewEmployees()
+    if (section === 'skill-dashboard' && skillRacks.length === 0) fetchSkillRacks()
+    if (section === 'employee-list' && allEmployees.length === 0) fetchAllEmployees()
+    if (section === 'talent-pool' && benchEmployees.length === 0) fetchBenchEmployees()
+    if (section === 'audit-log' && auditEvents.length === 0) fetchAuditLog(1)
+    if (section === 'metrics' && !metrics) fetchMetrics()
   }, [section])
 
   const fetchNewEmployees = async () => {
@@ -473,6 +506,15 @@ export default function HRDashboard() {
     setManualResults(results)
     setManualSending(false)
     if (results.every(r => r.status === 'sent')) setManualEmailInput('')
+  }
+
+  const fetchBenchEmployees = async () => {
+    setBenchLoading(true)
+    try {
+      const { data } = await api.get('/hr/bench-employees')
+      if (data.status === 'success') setBenchEmployees(data.data)
+    } catch { /* ignore */ }
+    finally { setBenchLoading(false) }
   }
 
   const fetchSkillRacks = async () => {
@@ -551,17 +593,19 @@ export default function HRDashboard() {
     finally { setAllExcelGenerating(false) }
   }
 
-  const filteredEmployees = allEmployees.filter(emp => {
-    if (!employeeSearch.trim()) return true
-    const q = employeeSearch.toLowerCase()
-    return (
-      emp.name?.toLowerCase().includes(q) ||
-      emp.email?.toLowerCase().includes(q) ||
-      emp.employee_id?.toLowerCase().includes(q) ||
-      emp.current_skill?.toLowerCase().includes(q) ||
-      emp.current_designation?.toLowerCase().includes(q)
-    )
-  })
+  const filteredEmployees = allEmployees
+    .filter(emp => {
+      if (!employeeSearch.trim()) return true
+      const q = employeeSearch.toLowerCase()
+      return (
+        emp.name?.toLowerCase().includes(q) ||
+        emp.email?.toLowerCase().includes(q) ||
+        emp.employee_id?.toLowerCase().includes(q) ||
+        emp.current_skill?.toLowerCase().includes(q) ||
+        emp.current_designation?.toLowerCase().includes(q)
+      )
+    })
+    .sort((a, b) => (a.employee_id || '').localeCompare(b.employee_id || '', 'en', { numeric: true }))
 
   const confirmDelete = async () => {
     if (!deleteTarget) return
@@ -601,6 +645,15 @@ export default function HRDashboard() {
       }
     } catch { /* ignore */ }
     finally { setAuditLoading(false) }
+  }
+
+  const fetchMetrics = async () => {
+    setMetricsLoading(true)
+    try {
+      const { data } = await api.get('/hr/metrics')
+      if (data.status === 'success') setMetrics(data.data)
+    } catch { /* ignore */ }
+    finally { setMetricsLoading(false) }
   }
 
   const applyAuditFilters = () => fetchAuditLog(1)
@@ -695,7 +748,8 @@ export default function HRDashboard() {
               { key: 'new-employees' as Section, label: 'New Employees', icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' },
               { key: 'skill-dashboard' as Section, label: 'Skill Dashboard', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2h0' },
               { key: 'employee-list' as Section, label: 'Employee List', icon: 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4' },
-              { key: 'audit-log' as Section, label: 'Audit Log', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+              { key: 'talent-pool' as Section, label: 'Talent Pool', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
+              { key: 'metrics' as Section, label: 'Monitoring', icon: 'M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
             ].map(s => (
               <button
                 key={s.key}
@@ -713,8 +767,25 @@ export default function HRDashboard() {
                     {newEmployees.length}
                   </span>
                 )}
+                {s.key === 'talent-pool' && benchEmployees.length > 0 && (
+                  <span className="ml-auto bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                    {benchEmployees.length}
+                  </span>
+                )}
               </button>
             ))}
+            {/* Audit log — system-level, de-emphasised */}
+            <button
+              onClick={() => setSection('audit-log')}
+              className={`w-full flex items-center gap-3 text-left text-xs px-3 py-2 rounded-lg transition mt-1 ${
+                section === 'audit-log' ? 'bg-slate-700 text-slate-200' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-800'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              System Audit Log
+            </button>
           </div>
         </div>
 
@@ -789,14 +860,18 @@ export default function HRDashboard() {
               {section === 'new-employees' && 'New Employees'}
               {section === 'skill-dashboard' && 'Skill Dashboard'}
               {section === 'employee-list' && 'Employee List'}
+              {section === 'talent-pool' && 'Talent Pool'}
               {section === 'audit-log' && 'Audit Log'}
+              {section === 'metrics' && 'Monitoring'}
             </h1>
             <p className="text-gray-400 text-sm">
               {section === 'search' && 'Find talent using natural language queries'}
               {section === 'new-employees' && 'Send onboarding invites so new hires can upload their resume'}
               {section === 'skill-dashboard' && 'Click a skill rack to see which employees currently work in that stack'}
               {section === 'employee-list' && 'Skill profile directory — all employees from skill summary data'}
+              {section === 'talent-pool' && 'Employees currently on bench and available for new project allocation'}
               {section === 'audit-log' && 'Track who changed what, and when, across the system'}
+              {section === 'metrics' && 'Live resume coverage, skill distribution and recent activity'}
             </p>
           </div>
           {section === 'employee-list' && (
@@ -1306,6 +1381,293 @@ export default function HRDashboard() {
           </div>
         )}
 
+        {/* ── Talent Pool ── */}
+        {section === 'talent-pool' && (
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            {benchLoading ? (
+              <div className="flex items-center justify-center py-24">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-gray-400 text-sm">Loading talent pool...</p>
+                </div>
+              </div>
+            ) : benchEmployees.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center max-w-xl mx-auto">
+                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No one on bench right now</h3>
+                <p className="text-gray-400 text-sm">Employees who mark themselves as available will appear here automatically.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <span className="bg-amber-50 text-amber-700 border border-amber-200 text-sm font-semibold px-3 py-1.5 rounded-full">
+                    {benchEmployees.length} available
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {benchEmployees.map(emp => (
+                    <div
+                      key={emp.employee_id}
+                      className="bg-white border border-amber-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-amber-200 transition-all duration-150"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                          {emp.name?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-gray-800 text-sm truncate">{emp.name}</p>
+                          <a href={`mailto:${emp.email}`} className="text-blue-500 text-xs hover:underline truncate block">{emp.email}</a>
+                        </div>
+                        <span className="bg-gray-100 text-gray-500 text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0">
+                          {emp.employee_id}
+                        </span>
+                      </div>
+
+                      {/* Skill fields */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-gray-50 rounded-xl p-2.5">
+                          <p className="text-gray-400 text-xs mb-0.5">Designation</p>
+                          <p className="text-gray-700 font-medium text-xs truncate">{emp.current_designation || '—'}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-2.5">
+                          <p className="text-gray-400 text-xs mb-0.5">Current Skill</p>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getSkillBadgeClass(emp.current_skill)}`}>
+                            {emp.current_skill || '—'}
+                          </span>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-2.5">
+                          <p className="text-gray-400 text-xs mb-0.5">Total Exp</p>
+                          <p className="text-gray-700 font-medium text-xs">{emp.total_exp ?? '—'} <span className="text-gray-400 font-normal">yrs</span></p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-2.5">
+                          <p className="text-gray-400 text-xs mb-0.5">Skill Exp</p>
+                          <p className="text-gray-700 font-medium text-xs">{emp.current_skill_exp ?? '—'} <span className="text-gray-400 font-normal">yrs</span></p>
+                        </div>
+                        {emp.primary_skill && (
+                          <div className="bg-gray-50 rounded-xl p-2.5">
+                            <p className="text-gray-400 text-xs mb-0.5">Primary Skill</p>
+                            <p className="text-gray-700 font-medium text-xs truncate">{emp.primary_skill}</p>
+                          </div>
+                        )}
+                        {emp.secondary_skill && (
+                          <div className="bg-gray-50 rounded-xl p-2.5">
+                            <p className="text-gray-400 text-xs mb-0.5">Secondary Skill</p>
+                            <p className="text-gray-700 font-medium text-xs truncate">{emp.secondary_skill}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bench badge */}
+                      <div className="mt-3 pt-3 border-t border-amber-50 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                        <span className="text-xs text-amber-600 font-medium">Available for allocation</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Monitoring / Metrics ── */}
+        {section === 'metrics' && (
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            {metricsLoading || !metrics ? (
+              <div className="flex items-center justify-center py-24">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-gray-400 text-sm">Loading metrics...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-5xl mx-auto space-y-6">
+
+                {/* KPI cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    {
+                      label: 'Total Employees',
+                      value: metrics.overview.total_employees,
+                      sub: 'in system',
+                      bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700',
+                      icon: 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4',
+                    },
+                    {
+                      label: 'Resumes Uploaded',
+                      value: metrics.overview.total_with_resume,
+                      sub: `${metrics.overview.coverage_pct}% coverage`,
+                      bg: 'bg-green-50', border: 'border-green-100', text: 'text-green-700',
+                      icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+                    },
+                    {
+                      label: 'Pending Resumes',
+                      value: metrics.overview.pending_resumes,
+                      sub: 'no resume yet',
+                      bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700',
+                      icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+                    },
+                    {
+                      label: 'Uploads (30 days)',
+                      value: metrics.activity.uploads_last_30d,
+                      sub: `${metrics.activity.uploads_last_7d} this week`,
+                      bg: 'bg-violet-50', border: 'border-violet-100', text: 'text-violet-700',
+                      icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
+                    },
+                  ].map(card => (
+                    <div key={card.label} className={`${card.bg} border ${card.border} rounded-2xl p-5`}>
+                      <div className={`w-9 h-9 rounded-xl ${card.bg} border ${card.border} flex items-center justify-center mb-3`}>
+                        <svg className={`w-5 h-5 ${card.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={card.icon} />
+                        </svg>
+                      </div>
+                      <p className={`text-3xl font-bold ${card.text}`}>{card.value}</p>
+                      <p className="text-gray-500 text-xs font-medium mt-0.5">{card.label}</p>
+                      <p className="text-gray-400 text-xs mt-0.5">{card.sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Coverage ring + activity stats */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                  {/* Coverage ring */}
+                  <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 flex items-center gap-6">
+                    <div className="relative w-28 h-28 flex-shrink-0">
+                      <svg viewBox="0 0 36 36" className="w-28 h-28 -rotate-90">
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f3f4f6" strokeWidth="3" />
+                        <circle
+                          cx="18" cy="18" r="15.915" fill="none"
+                          stroke="#2563eb" strokeWidth="3"
+                          strokeDasharray={`${metrics.overview.coverage_pct} ${100 - metrics.overview.coverage_pct}`}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-bold text-gray-800">{metrics.overview.coverage_pct}%</span>
+                        <span className="text-gray-400 text-xs">covered</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <h3 className="font-semibold text-gray-800 text-sm">Resume Coverage</h3>
+                      <div>
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                          <span>Uploaded</span>
+                          <span className="font-medium text-green-600">{metrics.overview.total_with_resume}</span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-green-500 rounded-full transition-all duration-700" style={{ width: `${metrics.overview.coverage_pct}%` }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                          <span>Pending</span>
+                          <span className="font-medium text-amber-600">{metrics.overview.pending_resumes}</span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-400 rounded-full transition-all duration-700" style={{ width: `${100 - metrics.overview.coverage_pct}%` }} />
+                        </div>
+                      </div>
+                      <p className="text-gray-400 text-xs pt-1">
+                        {metrics.overview.total_with_resume} of {metrics.overview.total_employees} employees
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Activity last 7 days */}
+                  <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                    <h3 className="font-semibold text-gray-800 text-sm mb-4">Activity — Last 7 Days</h3>
+                    <div className="space-y-4">
+                      {[
+                        { label: 'Resume Uploads',   value: metrics.activity.uploads_last_7d,  color: 'bg-blue-500',   max: Math.max(metrics.activity.uploads_last_7d, metrics.activity.updates_last_7d, metrics.activity.invites_last_7d, 1) },
+                        { label: 'Profile Updates',  value: metrics.activity.updates_last_7d,  color: 'bg-violet-500', max: Math.max(metrics.activity.uploads_last_7d, metrics.activity.updates_last_7d, metrics.activity.invites_last_7d, 1) },
+                        { label: 'Invites Sent',     value: metrics.activity.invites_last_7d,  color: 'bg-teal-500',   max: Math.max(metrics.activity.uploads_last_7d, metrics.activity.updates_last_7d, metrics.activity.invites_last_7d, 1) },
+                      ].map(row => (
+                        <div key={row.label}>
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>{row.label}</span>
+                            <span className="font-semibold text-gray-700">{row.value}</span>
+                          </div>
+                          <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${row.color} rounded-full transition-all duration-700`}
+                              style={{ width: `${(row.value / row.max) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Skill distribution */}
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                  <h3 className="font-semibold text-gray-800 text-sm mb-5">Skill Distribution</h3>
+                  {metrics.skill_distribution.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No skill data available yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {(() => {
+                        const maxCount = Math.max(...metrics.skill_distribution.map(s => s.count), 1)
+                        return metrics.skill_distribution.map(s => (
+                          <div key={s.skill} className="flex items-center gap-3">
+                            <span className="text-xs text-gray-600 font-medium w-32 truncate flex-shrink-0">{s.skill}</span>
+                            <div className="flex-1 h-7 bg-gray-50 rounded-lg overflow-hidden relative">
+                              <div
+                                className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-lg transition-all duration-700 flex items-center"
+                                style={{ width: `${Math.max((s.count / maxCount) * 100, 8)}%` }}
+                              >
+                                <span className="text-white text-xs font-semibold pl-2.5 whitespace-nowrap">{s.count}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent activity feed */}
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                  <h3 className="font-semibold text-gray-800 text-sm mb-4">Recent Activity</h3>
+                  {metrics.recent_feed.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No recent activity.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {metrics.recent_feed.map((ev, i) => {
+                        const eventMeta: Record<string, { label: string; dot: string }> = {
+                          RESUME_UPLOAD:          { label: 'uploaded a resume',       dot: 'bg-blue-500' },
+                          PROFILE_UPDATED:        { label: 'updated their profile',   dot: 'bg-violet-500' },
+                          SKILL_PROFILE_UPDATED:  { label: 'updated skill profile',   dot: 'bg-teal-500' },
+                          INVITE_SENT:            { label: 'invite sent',             dot: 'bg-amber-500' },
+                        }
+                        const meta = eventMeta[ev.event_type] ?? { label: ev.event_type, dot: 'bg-gray-400' }
+                        const time = ev.timestamp ? new Date(ev.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+                        return (
+                          <div key={i} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+                            <span className="text-gray-700 text-sm font-medium truncate">
+                              {ev.employee_id || ev.actor}
+                            </span>
+                            <span className="text-gray-400 text-sm">{meta.label}</span>
+                            <span className="ml-auto text-gray-400 text-xs whitespace-nowrap flex-shrink-0">{time}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Audit Log ── */}
         {section === 'audit-log' && (
           <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -1536,6 +1898,18 @@ export default function HRDashboard() {
                           <p className="text-gray-400 text-xs mb-0.5">Skill Exp</p>
                           <p className="text-gray-700 font-medium text-sm">{emp.current_skill_exp} <span className="text-gray-400 text-xs font-normal">yrs</span></p>
                         </div>
+                        {emp.primary_skill && (
+                          <div className="bg-white rounded-xl p-3 border border-gray-100">
+                            <p className="text-gray-400 text-xs mb-0.5">Primary Skill</p>
+                            <p className="text-gray-700 font-medium text-sm truncate">{emp.primary_skill}</p>
+                          </div>
+                        )}
+                        {emp.secondary_skill && (
+                          <div className="bg-white rounded-xl p-3 border border-gray-100">
+                            <p className="text-gray-400 text-xs mb-0.5">Secondary Skill</p>
+                            <p className="text-gray-700 font-medium text-sm truncate">{emp.secondary_skill}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
