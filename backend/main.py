@@ -10,6 +10,10 @@ from scheduler.monthly_scheduler import MonthlyScheduler
 from scheduler.scheduler_agent import SchedulerAgent
 from db.seed import seed_database
 from routes.routes import router as chat_router
+from routes.auth_routes import router as auth_router
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 import logging
 
@@ -49,12 +53,17 @@ async def lifespan(app: FastAPI):
         await scheduler.stop()
 
 
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title="Resume Management System",
     description="Backend for resume ingestion, search, and generation.",
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,4 +73,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")

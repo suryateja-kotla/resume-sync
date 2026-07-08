@@ -26,9 +26,10 @@ pandas
 # PDF reading (for resume extraction)
 PyMuPDF                 # fitz — fast PDF text + image extraction
 
-# Utilities
-# python-jose[cryptography]   # JWT for email tokens (Case 3 later)
-# httpx
+# Auth
+python-jose[cryptography]
+passlib[bcrypt]
+slowapi
 
 # Observability
 langfuse

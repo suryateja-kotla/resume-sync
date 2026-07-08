@@ -31,3 +31,17 @@ dist/
 build/
 *.egg-info/
 node_modules/
+
+# Runtime logs
+uvicorn.log
+uvicorn_err.log
+*.log
+
+# Local resume files (stored on OneDrive, not in repo)
+backend/resumes/
+backend/Sails Resumes/
+backend/output_excels/
+backend/output/
+
+# Temporary test/scratch files
+backend/test_blocks.txt

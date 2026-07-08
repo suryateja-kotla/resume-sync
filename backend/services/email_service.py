@@ -54,6 +54,35 @@ class EmailService:
         )
         logger.debug("Email HTML content for %s: %s", recipient_email, html_body)
 
+    def send_password_reset(
+        self,
+        recipient_email: str,
+        recipient_name: str,
+        reset_url: str,
+        expires_minutes: int = 30,
+    ) -> None:
+        subject = "Reset your ResumeSync password"
+        html_body = self._generate_password_reset_html(
+            recipient_name, reset_url, expires_minutes
+        )
+        if self._settings.email_delivery_mode.lower() == "smtp":
+            self._send_smtp_message(recipient_email, subject, html_body)
+            return
+        logger.info(
+            "Console mode — password reset email to %s, reset_url: %s",
+            recipient_email, reset_url,
+        )
+
+    def _generate_password_reset_html(
+        self, name: str, reset_url: str, expires_minutes: int
+    ) -> str:
+        template_path = (
+            Path(__file__).parent.parent / "templates" / "password_reset_mail.html"
+        )
+        return template_path.read_text().format(
+            name=name, reset_url=reset_url, expires_minutes=expires_minutes
+        )
+
     def _generate_update_prompt_html(self, name: str, update_url: str) -> str:
         """Load and render the resume update email template."""
         template_path = (

@@ -1,8 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
-import Login from './pages/Login'
-import HRDashboard from './pages/HRDashboard'
+import Login          from './pages/Login'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword  from './pages/ResetPassword'
+import ChangePassword from './pages/ChangePassword'
+import HRDashboard    from './pages/HRDashboard'
 import EmployeeDashboard from './pages/EmployeeDashboard'
 
 export default function App() {
@@ -10,7 +13,15 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* Public routes — no auth required */}
+          <Route path="/login"          element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password"  element={<ResetPassword />} />
+
+          {/* Semi-protected — must be logged in but can have mustChangePassword=true */}
+          <Route path="/change-password" element={<ChangePassword />} />
+
+          {/* Fully protected routes */}
           <Route
             path="/hr-dashboard"
             element={
@@ -27,6 +38,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>

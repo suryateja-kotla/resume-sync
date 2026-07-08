@@ -26,6 +26,11 @@ async def seed_database():
                 "event_type": {
                     "enum": [
                         "LOGIN",
+                        "LOGOUT",
+                        "FAILED_LOGIN",
+                        "PASSWORD_CHANGED",
+                        "PASSWORD_RESET_REQUESTED",
+                        "PASSWORD_RESET_COMPLETED",
                         "RESUME_UPLOAD",
                         "PROFILE_UPDATED",
                         "SKILL_PROFILE_UPDATED",
@@ -75,33 +80,35 @@ async def seed_database():
             "timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS
         )
 
-    if "employee_data" not in existing_collections:
+    if "user_accounts" not in existing_collections:
         await db.create_collection(
-            "employee_data",
+            "user_accounts",
             validator={
                 "$jsonSchema": {
                     "bsonType": "object",
-                    "required": ["employeeId", "fullName", "email", "status", "role"],
+                    "required": ["employeeId", "email", "status", "role"],
                     "properties": {
-                        "_id": {"bsonType": "objectId"},
-                        "employeeId": {"bsonType": "string"},
-                        "fullName": {"bsonType": "string"},
+                        "_id":                  {"bsonType": "objectId"},
+                        "employeeId":           {"bsonType": "string"},
                         "email": {
                             "bsonType": "string",
                             "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
                         },
-                        "currentRole": {"bsonType": "string"},
-                        "department": {"bsonType": "string"},
-                        "status": {"enum": ["Active", "Inactive", "On Leave"]},
-                        "role": {"enum": ["HR", "EMPLOYEE"]},
-                        "isOnBench": {"bsonType": "bool"},
-                        "lastProfileUpdate": {"bsonType": "date"},
+                        "status":               {"enum": ["Active", "Inactive", "On Leave"]},
+                        "role":                 {"enum": ["HR", "EMPLOYEE"]},
+                        "password_hash":        {"bsonType": ["string", "null"]},
+                        "must_change_password": {"bsonType": ["bool", "null"]},
+                        "refresh_token_hash":   {"bsonType": ["string", "null"]},
+                        "reset_token_hash":     {"bsonType": ["string", "null"]},
+                        "reset_token_expires":  {"bsonType": ["date", "null"]},
+                        "lastLoginAt":          {"bsonType": ["date", "null"]},
                     },
                 }
             },
         )
 
-        await db.employee_data.create_index("employeeId", unique=True)
+        await db.user_accounts.create_index("employeeId", unique=True)
+        await db.user_accounts.create_index("email",      unique=True)
 
     if "employee_resume_data" not in existing_collections:
         await db.create_collection(
@@ -337,8 +344,8 @@ async def seed_database():
 
     # Unique indexes — drop existing non-unique versions first, then recreate
     for col_name, field in [
-        ("employee_data", "employeeId"),
-        ("employee_data", "email"),
+        ("user_accounts", "employeeId"),
+        ("user_accounts", "email"),
         ("employee_skill_summary", "employee_id"),
         ("employee_resume_data", "employee_id"),
         ("resume_store", "employee_id"),
@@ -352,22 +359,19 @@ async def seed_database():
         await col.create_index(field, unique=True, background=True)
     logger.info("Unique indexes ensured on all collections.")
 
-    # Seed HR user only if not already present
-    hr_exists = await db.employee_data.find_one({"employeeId": "HR001"})
+    # Seed HR user account only if not already present
+    hr_exists = await db.user_accounts.find_one({"employeeId": "HR001"})
     if not hr_exists:
-        await db.employee_data.insert_one(
+        now = datetime.now(timezone.utc)
+        await db.user_accounts.insert_one(
             {
-                "employeeId": "HR001",
-                "fullName": "Naveen",
-                "email": "hr@sailssoftware.com",
-                "currentRole": "HR Manager",
-                "department": "Human Resources",
-                "status": "Active",
-                "role": "HR",
-                "isOnBench": False,
-                "lastProfileUpdate": datetime.now(timezone.utc),
+                "employeeId":  "HR001",
+                "email":       "hr@sailssoftware.com",
+                "status":      "Active",
+                "role":        "HR",
+                "lastLoginAt": now,
             }
         )
-        logger.info("HR seed record inserted.")
+        logger.info("HR user_account seed record inserted.")
     else:
-        logger.info("Seed data already exists, skipping...")
+        logger.info("HR user_account already exists, skipping...")

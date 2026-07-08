@@ -21,3 +21,13 @@ __pycache__/
 # generated documents
 output/
 output_excels/
+
+# Local resume files (stored on OneDrive)
+resumes/
+Sails Resumes/
+
+# Runtime logs
+*.log
+
+# Temporary test/scratch files
+test_blocks.txt

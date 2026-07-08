@@ -15,7 +15,8 @@ DB_NAME = os.getenv("MONGO_DB_NAME", "resume_sync_db")
 client = AsyncIOMotorClient(MONGO_URI)
 db = client[DB_NAME]
 
-col_employee_data = db["employee_data"]
+col_user_accounts = db["user_accounts"]
+col_employee_skill_summary = db["employee_skill_summary"]
 col_employee_resume_data = db["employee_resume_data"]
 col_resume_store = db["resume_store"]
 col_audit_data = db["audit_data"]
@@ -125,9 +126,9 @@ async def search_employees_and_get_resume_paths(
         {"_id": 0, "employee_id": 1, "resume_path": 1},
     )
 
-    employee_cursor = col_employee_data.find(
-        {"employeeId": {"$in": employee_ids}},
-        {"_id": 0, "employeeId": 1, "email": 1, "fullName": 1},
+    employee_cursor = col_employee_skill_summary.find(
+        {"employee_id": {"$in": employee_ids}},
+        {"_id": 0, "employee_id": 1, "email": 1, "name": 1, "is_on_bench": 1},
     )
 
     resume_data_cursor = col_employee_resume_data.find(
@@ -140,7 +141,7 @@ async def search_employees_and_get_resume_paths(
     resume_data_docs = await resume_data_cursor.to_list(length=None)
 
     resume_paths = {d["employee_id"]: d.get("resume_path", "") for d in resume_docs}
-    employee_info = {d["employeeId"]: d for d in employee_docs}
+    employee_info = {d["employee_id"]: d for d in employee_docs}
     resume_data = {d["employee_id"]: d for d in resume_data_docs}
 
     results = []
@@ -151,12 +152,12 @@ async def search_employees_and_get_resume_paths(
         results.append(
             {
                 "employee_id": emp_id,
-                "name": info.get("fullName", ""),
-                "email": info.get("email", ""),
+                "name":        info.get("name", ""),
+                "email":       info.get("email", ""),
                 "resume_path": resume_paths.get(emp_id, ""),
-                "skills": rdata.get("search_tags", []),
-                "experience": rdata.get("total_experience", 0),
-                "isOnBench": rdata.get("isOnBench", False),
+                "skills":      rdata.get("search_tags", []),
+                "experience":  rdata.get("total_experience", 0),
+                "isOnBench":   info.get("is_on_bench", False),
             }
         )
     return json.dumps({"status": "success", "count": len(results), "data": results})

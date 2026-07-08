@@ -60,17 +60,14 @@ class BulkEmployees(BaseModel):
     employees: List[EmployeePayload]
 
 
-class EmployeeDataDocument(BaseModel):
-    """Mirrors employee_data collection."""
+class UserAccountDocument(BaseModel):
+    """Mirrors user_accounts collection — auth/access only."""
 
     employeeId: str
-    fullName: str
-    email: Optional[str] = None
-    currentRole: Optional[str] = None
-    department: Optional[str] = None
+    email: str
+    role: str = "EMPLOYEE"
     status: str = "Active"
-    isOnBench: bool = False
-    lastProfileUpdate: Optional[datetime] = None
+    lastLoginAt: Optional[datetime] = None
 
 
 class ResumeStoreDocument(BaseModel):

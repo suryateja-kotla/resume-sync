@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
-from schemas.schemas import EmployeePayload
 from constants.skill_categories import SKILL_CATEGORIES, normalize_skill
 import logging
 
@@ -18,7 +17,7 @@ DB_NAME = os.getenv("MONGO_DB_NAME", "resume_sync_db")
 client = AsyncIOMotorClient(MONGO_URI)
 db = client[DB_NAME]
 
-col_employee_data = db["employee_data"]
+col_user_accounts = db["user_accounts"]
 col_employee_resume_data = db["employee_resume_data"]
 col_resume_store = db["resume_store"]
 col_audit_data = db["audit_data"]
@@ -26,17 +25,32 @@ col_employee_skill_summary = db["employee_skill_summary"]
 
 
 async def get_employee_by_email(email: str) -> Optional[Dict[str, Any]]:
+    """Returns a merged dict of user_accounts + employee_skill_summary fields
+    so callers get employeeId, role, status, fullName, currentRole, department,
+    isOnBench — same shape as before, no code changes needed in routes."""
     try:
-        return await col_employee_data.find_one({"email": email}, {"_id": 0})
+        account = await col_user_accounts.find_one({"email": email}, {"_id": 0})
+        if not account:
+            return None
+        skill = await col_employee_skill_summary.find_one(
+            {"employee_id": account["employeeId"]}, {"_id": 0}
+        ) or {}
+        return {
+            **account,
+            "fullName":    skill.get("name", account.get("email", "").split("@")[0].title()),
+            "currentRole": skill.get("current_designation", ""),
+            "department":  skill.get("department", ""),
+            "isOnBench":   skill.get("is_on_bench", False),
+        }
     except PyMongoError as e:
         logger.error(f"get_employee_by_email error: {e}")
         return None
 
 
 async def provision_new_employee(email: str) -> Optional[Dict[str, Any]]:
-    """Auto-creates employee_data + employee_skill_summary records the first
+    """Auto-creates user_accounts + employee_skill_summary records the first
     time someone logs in with an email not yet in the system.
-    Uses SS-based IDs derived from employee_skill_summary if the email matches,
+    Uses SS-based IDs from employee_skill_summary if the email matches,
     otherwise generates a temporary PROV-prefixed ID until HR assigns an SS ID."""
     try:
         local_part = email.split("@")[0]
@@ -49,12 +63,11 @@ async def provision_new_employee(email: str) -> Optional[Dict[str, Any]]:
         )
 
         if ss_doc:
-            # Use the existing SS ID from skill_summary
             employee_id = ss_doc["employee_id"]
             guessed_name = ss_doc.get("name", guessed_name)
         else:
             # Generate a provisional ID — HR must assign real SS ID later
-            last = await col_employee_data.find(
+            last = await col_user_accounts.find(
                 {"employeeId": {"$regex": "^PROV\\d+$"}},
                 {"_id": 0, "employeeId": 1},
             ).sort("employeeId", -1).to_list(length=1)
@@ -67,43 +80,52 @@ async def provision_new_employee(email: str) -> Optional[Dict[str, Any]]:
             employee_id = f"PROV{next_num:03d}"
 
         now = datetime.now(timezone.utc)
-        doc = {
-            "employeeId": employee_id,
-            "fullName": guessed_name,
-            "email": email,
-            "currentRole": "New Employee",
-            "department": "Unassigned",
-            "status": "Active",
-            "role": "EMPLOYEE",
-            "isOnBench": False,
-            "lastProfileUpdate": now,
+        account_doc = {
+            "employeeId":  employee_id,
+            "email":       email,
+            "role":        "EMPLOYEE",
+            "status":      "Active",
+            "lastLoginAt": now,
         }
-        await col_employee_data.insert_one(doc)
-        doc.pop("_id", None)
+        await col_user_accounts.update_one(
+            {"employeeId": employee_id},
+            {"$setOnInsert": account_doc},
+            upsert=True,
+        )
+        account_doc.pop("_id", None)
 
         # Seed a blank skill_summary entry if one doesn't exist yet
-        existing_ss = await col_employee_skill_summary.find_one({"employee_id": employee_id})
-        if not existing_ss:
+        if not ss_doc:
             await col_employee_skill_summary.update_one(
                 {"employee_id": employee_id},
                 {"$setOnInsert": {
-                    "employee_id": employee_id,
-                    "name": guessed_name,
-                    "email": email,
+                    "employee_id":        employee_id,
+                    "name":               guessed_name,
+                    "email":              email,
                     "current_designation": "",
-                    "current_skill": "",
-                    "primary_skill": "",
-                    "secondary_skill": "",
-                    "total_exp": 0.0,
-                    "current_skill_exp": 0.0,
-                    "is_on_bench": False,
-                    "skill_history": [],
-                    "updated_at": now,
+                    "current_skill":      "",
+                    "primary_skill":      "",
+                    "secondary_skill":    "",
+                    "total_exp":          0.0,
+                    "current_skill_exp":  0.0,
+                    "is_on_bench":        False,
+                    "skill_history":      [],
+                    "updated_at":         now,
                 }},
                 upsert=True,
             )
 
-        return doc
+        # Return merged shape (same as get_employee_by_email)
+        skill = await col_employee_skill_summary.find_one(
+            {"employee_id": employee_id}, {"_id": 0}
+        ) or {}
+        return {
+            **account_doc,
+            "fullName":    skill.get("name", guessed_name),
+            "currentRole": skill.get("current_designation", ""),
+            "department":  skill.get("department", ""),
+            "isOnBench":   skill.get("is_on_bench", False),
+        }
     except PyMongoError as e:
         logger.error(f"provision_new_employee error for {email}: {e}")
         return None
@@ -111,11 +133,11 @@ async def provision_new_employee(email: str) -> Optional[Dict[str, Any]]:
 
 async def get_all_employees() -> list[Dict[str, Any]]:
     try:
-        cursor = col_employee_data.find(
+        cursor = col_employee_skill_summary.find(
             {"email": {"$exists": True, "$ne": None}},
-            {"_id": 0, "email": 1, "fullName": 1},
+            {"_id": 0, "email": 1, "name": 1},
         )
-        return [employee async for employee in cursor]
+        return [{"email": d["email"], "fullName": d["name"]} async for d in cursor]
     except PyMongoError as e:
         logger.error(f"get_all_employees error: {e}")
         return []
@@ -147,23 +169,18 @@ def _extract_search_tags(skills: Dict[str, Any]) -> list:
 
 async def upsert_employee_data(
     employee_id: str,
-    current_role: Optional[str] = None,
-    department: Optional[str] = None,
+    current_role: Optional[str] = None,  # noqa: kept for call-site compat
+    department: Optional[str] = None,    # noqa: kept for call-site compat
     status: str = "Active",
 ) -> Dict[str, Any]:
+    """Updates user_accounts status/lastLoginAt; designation/department live in
+    employee_skill_summary and are updated via upsert_employee_skill_summary."""
     try:
-        update_fields = {
-            "employeeId": employee_id,
-            "status": status,
-            "lastProfileUpdate": datetime.now(timezone.utc),
+        update_fields: Dict[str, Any] = {
+            "status":      status,
+            "lastLoginAt": datetime.now(timezone.utc),
         }
-        if current_role:
-            update_fields["currentRole"] = current_role
-        if department:
-            update_fields["department"] = department
-        logger.debug(f"upsert_employee_data update_fields: {update_fields}")
-
-        result = await col_employee_data.update_one(
+        result = await col_user_accounts.update_one(
             {"employeeId": employee_id},
             {"$set": update_fields},
             upsert=True,
@@ -350,19 +367,32 @@ async def upsert_employee_skill_summary(
 
 
 async def get_new_employees() -> list[Dict[str, Any]]:
-    """Employees who exist in employee_data but have not uploaded/been seeded
-    with resume data yet — i.e. still need an onboarding invite email."""
+    """Employees in employee_skill_summary who have not uploaded a resume yet —
+    candidates for an onboarding invite email from HR."""
     try:
-        resumed_ids = await col_employee_resume_data.distinct("employee_id")
-        cursor = col_employee_data.find(
+        resumed_ids = set(await col_employee_resume_data.distinct("employee_id"))
+        cursor = col_employee_skill_summary.find(
             {
-                "employeeId": {"$nin": resumed_ids},
+                "employee_id": {"$nin": list(resumed_ids)},
                 "email": {"$exists": True, "$ne": None},
-                "role": {"$ne": "HR"},
             },
-            {"_id": 0, "employeeId": 1, "fullName": 1, "email": 1, "department": 1},
+            {"_id": 0, "employee_id": 1, "name": 1, "email": 1},
         )
-        return [employee async for employee in cursor]
+        results = []
+        async for d in cursor:
+            # Exclude HR accounts
+            acct = await col_user_accounts.find_one(
+                {"employeeId": d["employee_id"]}, {"_id": 0, "role": 1}
+            )
+            if acct and acct.get("role") == "HR":
+                continue
+            results.append({
+                "employeeId": d["employee_id"],
+                "fullName":   d.get("name", ""),
+                "email":      d.get("email", ""),
+                "department": d.get("department", ""),
+            })
+        return results
     except PyMongoError as e:
         logger.error(f"get_new_employees error: {e}")
         return []
@@ -451,51 +481,40 @@ async def _get_resume_paths_by_employee_id(employee_ids: list[str]) -> Dict[str,
 
 async def get_full_employee_directory() -> list[Dict[str, Any]]:
     """Full org-wide employee list for the HR 'Employee List' Excel report —
-    joins employee_data (identity/status) with employee_skill_summary
-    (current designation/skill/experience) and flags resume status."""
+    sourced entirely from employee_skill_summary (single source of truth)
+    joined with user_accounts for role/status and resume collections."""
     try:
-        employees = await col_employee_data.find(
-            {"role": {"$ne": "HR"}},
-            {
-                "_id": 0,
-                "employeeId": 1,
-                "fullName": 1,
-                "email": 1,
-                "department": 1,
-                "currentRole": 1,
-                "status": 1,
-                "isOnBench": 1,
-            },
-        ).to_list(length=None)
+        # Exclude HR accounts
+        hr_ids = set()
+        async for acct in col_user_accounts.find({"role": "HR"}, {"_id": 0, "employeeId": 1}):
+            hr_ids.add(acct["employeeId"])
 
-        skill_docs = await col_employee_skill_summary.find({}, {"_id": 0}).to_list(
-            length=None
-        )
-        skill_by_id = {d["employee_id"]: d for d in skill_docs}
+        skill_docs = await col_employee_skill_summary.find({}, {"_id": 0}).to_list(length=None)
 
         resumed_ids = set(await col_employee_resume_data.distinct("employee_id"))
         resume_paths = await _get_resume_paths_by_employee_id(
-            [emp.get("employeeId", "") for emp in employees]
+            [d["employee_id"] for d in skill_docs]
         )
 
         results = []
-        for emp in employees:
-            emp_id = emp.get("employeeId", "")
-            skill = skill_by_id.get(emp_id, {})
+        for skill in skill_docs:
+            emp_id = skill["employee_id"]
+            if emp_id in hr_ids:
+                continue
             results.append(
                 {
-                    "employee_id": emp_id,
-                    "name": emp.get("fullName"),
-                    "email": emp.get("email"),
-                    "department": emp.get("department"),
-                    "current_role": emp.get("currentRole"),
+                    "employee_id":        emp_id,
+                    "name":               skill.get("name", ""),
+                    "email":              skill.get("email", ""),
+                    "department":         skill.get("department", ""),
+                    "current_role":       skill.get("current_designation", ""),
                     "current_designation": skill.get("current_designation", ""),
-                    "current_skill": skill.get("current_skill", ""),
-                    "total_exp": skill.get("total_exp", ""),
-                    "current_skill_exp": skill.get("current_skill_exp", ""),
-                    "bench_status": "On Bench" if emp.get("isOnBench") else "Active",
-                    "resume_status": "Uploaded" if emp_id in resumed_ids else "Pending",
-                    "resume_path": resume_paths.get(emp_id),
+                    "current_skill":      skill.get("current_skill", ""),
+                    "total_exp":          skill.get("total_exp", ""),
+                    "current_skill_exp":  skill.get("current_skill_exp", ""),
+                    "bench_status":       "On Bench" if skill.get("is_on_bench") else "Active",
+                    "resume_status":      "Uploaded" if emp_id in resumed_ids else "Pending",
+                    "resume_path":        resume_paths.get(emp_id),
                 }
             )
         return results
@@ -506,7 +525,13 @@ async def get_full_employee_directory() -> list[Dict[str, Any]]:
 
 async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
     """Returns all records from employee_skill_summary joined with resume_store
-    for the Employee List table — no bench status, just skill profile fields."""
+    for the Employee List table — no bench status, just skill profile fields.
+
+    Resume status uses employee_resume_data as the authoritative source
+    (parsed content exists = resume uploaded/seeded). resume_store path is
+    included when available but is not required for Uploaded status — some
+    employees were seeded directly without a file path record.
+    """
     try:
         docs = await col_employee_skill_summary.find(
             {},
@@ -522,13 +547,19 @@ async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
             },
         ).sort("employee_id", 1).to_list(length=None)
 
-        resume_paths = await _get_resume_paths_by_employee_id(
-            [d["employee_id"] for d in docs]
+        ids = [d["employee_id"] for d in docs]
+
+        # employee_resume_data is the source of truth — if parsed content exists,
+        # the employee has a resume regardless of whether resume_store has a path.
+        resumed_ids = set(
+            await col_employee_resume_data.distinct("employee_id", {"employee_id": {"$in": ids}})
         )
+        resume_paths = await _get_resume_paths_by_employee_id(ids)
+
         for d in docs:
-            path = resume_paths.get(d["employee_id"])
-            d["resume_path"] = path
-            d["resume_status"] = "Uploaded" if path else "Pending"
+            eid = d["employee_id"]
+            d["resume_path"] = resume_paths.get(eid)
+            d["resume_status"] = "Uploaded" if eid in resumed_ids else "Pending"
         return docs
     except PyMongoError as e:
         logger.error(f"get_all_skill_summary_employees error: {e}")
@@ -572,7 +603,7 @@ async def delete_employee(employee_id: str) -> Dict[str, Any]:
             except Exception as e:
                 logger.warning(f"delete_employee: could not remove file for {employee_id}: {e}")
 
-        await col_employee_data.delete_one({"employeeId": employee_id})
+        await col_user_accounts.delete_one({"employeeId": employee_id})
         await col_employee_resume_data.delete_one({"employee_id": employee_id})
         await col_resume_store.delete_one({"employee_id": employee_id})
         await col_employee_skill_summary.delete_one({"employee_id": employee_id})
