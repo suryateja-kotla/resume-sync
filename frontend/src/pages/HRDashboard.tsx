@@ -1,4 +1,16 @@
 import { useState } from 'react'
+import {
+  BarChart3,
+  BriefcaseBusiness,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Section } from '../types/hr'
@@ -14,6 +26,7 @@ export default function HRDashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [section, setSection] = useState<Section>('search')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [newEmployeeCount, setNewEmployeeCount] = useState(0)
   const [benchCount, setBenchCount] = useState(0)
   const [allExcelGenerating, setAllExcelGenerating] = useState(false)
@@ -23,13 +36,13 @@ export default function HRDashboard() {
     navigate('/login')
   }
 
-  const NAV_ITEMS: { key: Section; label: string; icon: string }[] = [
-    { key: 'search',         label: 'Candidate Search', icon: 'M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z' },
-    { key: 'new-employees',  label: 'New Employees',    icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' },
-    { key: 'skill-dashboard',label: 'Skill Dashboard',  icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2h0' },
-    { key: 'employee-list',  label: 'Employee List',    icon: 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4' },
-    { key: 'talent-pool',    label: 'Talent Pool',      icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
-    { key: 'metrics',        label: 'Monitoring',       icon: 'M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
+  const NAV_ITEMS: { key: Section; label: string; icon: typeof Search }[] = [
+    { key: 'search', label: 'Candidate Search', icon: Search },
+    { key: 'new-employees', label: 'New Employees', icon: UserPlus },
+    { key: 'skill-dashboard', label: 'Skill Dashboard', icon: BarChart3 },
+    { key: 'employee-list', label: 'Employee List', icon: Users },
+    { key: 'talent-pool', label: 'Talent Pool', icon: BriefcaseBusiness },
+    { key: 'metrics', label: 'Monitoring', icon: ShieldCheck },
   ]
 
   const SECTION_SUBTITLE: Record<Section, string> = {
@@ -56,87 +69,94 @@ export default function HRDashboard() {
     <div className="flex h-screen bg-gray-50">
 
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 flex flex-col flex-shrink-0">
-        {/* Logo */}
-        <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <span className="text-white font-bold text-lg">ResumeSync</span>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <div className="p-4 border-b border-slate-700">
-          <div className="space-y-1">
-            {NAV_ITEMS.map(s => (
-              <button
-                key={s.key}
-                onClick={() => setSection(s.key)}
-                className={`w-full flex items-center gap-3 text-left text-sm px-3 py-2.5 rounded-lg transition ${
-                  section === s.key ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={s.icon} />
-                </svg>
-                {s.label}
-                {s.key === 'new-employees' && newEmployeeCount > 0 && (
-                  <span className="ml-auto bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                    {newEmployeeCount}
-                  </span>
-                )}
-                {s.key === 'talent-pool' && benchCount > 0 && (
-                  <span className="ml-auto bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                    {benchCount}
-                  </span>
-                )}
-              </button>
-            ))}
+      <aside className={`flex flex-col flex-shrink-0 border-r border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(129,140,248,0.14),_transparent_45%),linear-gradient(135deg,_#020617,_#0f172a_55%,_#111827)] text-slate-200 shadow-[16px_0_50px_-24px_rgba(2,6,23,0.8)] transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-72'}`}>
+        <div className="border-b border-white/10 p-4">
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 shadow-lg shadow-violet-900/30">
+                  <Sparkles className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">ResumeSync</p>
+                  <p className="text-xs text-slate-400">HR Workspace</p>
+                </div>
+              </div>
+            )}
             <button
-              onClick={() => setSection('audit-log')}
-              className={`w-full flex items-center gap-3 text-left text-xs px-3 py-2 rounded-lg transition mt-1 ${
-                section === 'audit-log' ? 'bg-slate-700 text-slate-200' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-800'
-              }`}
+              onClick={() => setSidebarCollapsed(v => !v)}
+              className="rounded-xl p-2 text-slate-400 transition hover:bg-white/10 hover:text-white"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              System Audit Log
+              {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </button>
           </div>
         </div>
 
-        {/* Sidebar content area (quick searches for candidate search) */}
-        <div className="p-6 flex-1">
-          {/* nothing here for non-search sections */}
+        <div className="flex-1 overflow-y-auto p-3">
+          <div className="space-y-1.5">
+            {NAV_ITEMS.map(item => {
+              const Icon = item.icon
+              const isActive = section === item.key
+              const showBadge = item.key === 'new-employees' ? newEmployeeCount > 0 : item.key === 'talent-pool' ? benchCount > 0 : false
+              const badgeValue = item.key === 'new-employees' ? newEmployeeCount : benchCount
+
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setSection(item.key)}
+                  className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition ${
+                    isActive ? 'bg-white/10 text-white shadow-inner' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${isActive ? 'bg-violet-500/20 text-violet-200' : 'bg-white/5 text-slate-400 group-hover:text-white'}`}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                  {!sidebarCollapsed && showBadge && (
+                    <span className="ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-amber-950">
+                      {badgeValue}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+
+            <button
+              onClick={() => setSection('audit-log')}
+              className={`mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm transition ${
+                section === 'audit-log' ? 'bg-white/10 text-white' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
+              }`}
+            >
+              <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${section === 'audit-log' ? 'bg-white/10 text-white' : 'bg-white/5 text-slate-500'}`}>
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              {!sidebarCollapsed && <span className="text-xs uppercase tracking-[0.2em]">Audit Log</span>}
+            </button>
+          </div>
         </div>
 
-        {/* User footer */}
-        <div className="p-6 border-t border-slate-700">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
-              {(user?.fullName || user?.email || 'H')[0].toUpperCase()}
+        <div className="border-t border-white/10 p-4">
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} gap-3`}>
+            <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} min-w-0`}>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-sm font-semibold text-white shadow-lg shadow-violet-950/30">
+                {(user?.fullName || user?.email || 'H')[0].toUpperCase()}
+              </div>
+              {!sidebarCollapsed && (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white">{user?.fullName || 'HR User'}</p>
+                  <p className="truncate text-xs text-slate-400">{user?.email}</p>
+                </div>
+              )}
             </div>
-            <div className="min-w-0">
-              <p className="text-white text-sm font-medium truncate">{user?.fullName || 'HR User'}</p>
-              <p className="text-slate-400 text-xs truncate">{user?.email}</p>
-            </div>
+            <button
+              onClick={handleLogout}
+              className={`flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white ${sidebarCollapsed ? 'ml-0' : ''}`}
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full text-slate-400 hover:text-white hover:bg-slate-800 text-sm px-3 py-2 rounded-lg transition flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Sign out
-          </button>
         </div>
       </aside>
 

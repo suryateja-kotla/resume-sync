@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Mail, Send, ArrowRight, Sparkles, UserPlus, CheckCircle2, AlertCircle, Clock3 } from 'lucide-react'
 import api from '../../api/axios'
 import { NewEmployee } from '../../types/hr'
 
@@ -85,135 +86,125 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
   const emailCount = manualEmailInput.split(/[\n,;]+/).map(e => e.trim()).filter(Boolean).length
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6">
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Manual invite box */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Invite a New Employee</h2>
-          <p className="text-gray-400 text-sm mb-4">
-            Enter their Outlook email address. They'll receive a notification — once they click it, they can log in with their email and upload their resume.
+    <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="rounded-[32px] border border-violet-100 bg-gradient-to-br from-violet-600 via-indigo-600 to-slate-900 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
+                <Sparkles className="h-4 w-4" />
+                Welcome new joiners
+              </div>
+              <h2 className="text-2xl font-semibold">Invite employees to start their resume journey</h2>
+              <p className="mt-2 max-w-2xl text-sm text-violet-100">
+                Send onboarding invitations by email and keep track of who is still pending their first resume upload.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur">
+              <p className="text-sm text-violet-100">Pending now</p>
+              <p className="text-2xl font-semibold">{newEmployees.length}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.25)]">
+          <div className="mb-4 flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-violet-600" />
+            <h3 className="text-lg font-semibold text-slate-800">Send a new invite</h3>
+          </div>
+          <p className="mb-4 text-sm text-slate-500">
+            Enter their work email address. A notification will be sent and they can log in to upload their resume.
           </p>
           <textarea
             value={manualEmailInput}
             onChange={e => setManualEmailInput(e.target.value)}
-            placeholder={"name@sailssoftware.com\nYou can paste multiple emails — one per line, or comma-separated"}
-            rows={3}
-            className="w-full resize-none px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 placeholder-gray-400 text-sm leading-relaxed transition"
+            placeholder={"name@sailssoftware.com\nPaste multiple addresses — one per line or comma separated"}
+            rows={4}
+            className="w-full resize-none rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700 outline-none transition focus:border-violet-400 focus:bg-white"
           />
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-gray-400 text-xs">{emailCount} email(s) ready to send</p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">{emailCount} email{emailCount === 1 ? '' : 's'} ready to send</p>
             <button
               onClick={sendManualInvites}
               disabled={!manualEmailInput.trim() || manualSending}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition flex items-center gap-2"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-300"
             >
               {manualSending ? (
                 <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   Sending...
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
+                  <Send className="h-4 w-4" />
                   Send Invite{emailCount > 1 ? 's' : ''}
                 </>
               )}
             </button>
           </div>
           {manualResults.length > 0 && (
-            <div className="mt-4 space-y-1.5 border-t border-gray-100 pt-4">
+            <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
               {manualResults.map((r, i) => (
-                <div key={i} className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
-                  r.status === 'sent' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                }`}>
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {r.status === 'sent'
-                      ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />}
-                  </svg>
+                <div key={i} className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-sm ${r.status === 'sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                  {r.status === 'sent' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                   <span className="truncate">{r.email}</span>
-                  <span className="text-xs opacity-75 ml-auto flex-shrink-0">
-                    {r.status === 'sent' ? 'Invite sent' : (r.message || 'Failed')}
-                  </span>
+                  <span className="ml-auto text-xs opacity-80">{r.status === 'sent' ? 'Invite sent' : r.message || 'Failed'}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Pending employees list */}
-        <div>
-          <p className="text-gray-500 text-sm font-medium mb-3">Pending in System (no resume yet)</p>
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.25)]">
+          <div className="mb-4 flex items-center gap-2">
+            <Clock3 className="h-5 w-5 text-slate-600" />
+            <h3 className="text-lg font-semibold text-slate-800">Still waiting for a resume</h3>
+          </div>
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center justify-center py-10">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
             </div>
           ) : newEmployees.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-              <p className="text-gray-400 text-sm">
-                Everyone already in the system has uploaded a resume. Employees added to HR records without a resume will show up here automatically.
-              </p>
+            <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+              Everyone already in the system has uploaded a resume. New onboarding entries without a resume will show here automatically.
             </div>
           ) : (
             <div className="space-y-3">
               {newEmployees.map(emp => {
                 const status = inviteStatus[emp.email]
                 return (
-                  <div key={emp.employee_id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                  <div key={emp.employee_id} className="flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 text-base font-semibold text-white">
                         {emp.name?.[0]?.toUpperCase() || 'E'}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm truncate">{emp.name}</p>
-                        <p className="text-gray-500 text-xs truncate">{emp.email}</p>
-                        <p className="text-gray-400 text-xs mt-0.5">
-                          ID: {emp.employee_id}{emp.department ? ` · ${emp.department}` : ''}
-                        </p>
+                        <p className="truncate font-semibold text-slate-800">{emp.name}</p>
+                        <p className="truncate text-sm text-slate-500">{emp.email}</p>
+                        <p className="mt-0.5 text-xs text-slate-400">ID: {emp.employee_id}{emp.department ? ` · ${emp.department}` : ''}</p>
                       </div>
                     </div>
-                    <div className="flex-shrink-0">
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
                       {status === 'sent' ? (
-                        <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-100 text-sm font-medium px-4 py-2 rounded-xl">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Invite Sent
+                        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Invite sent
                         </span>
                       ) : (
                         <button
                           onClick={() => sendInvite(emp.email)}
                           disabled={sendingInvite === emp.email}
-                          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium px-4 py-2 rounded-xl transition flex items-center gap-2"
+                          className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-300"
                         >
                           {sendingInvite === emp.email ? (
-                            <>
-                              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                              Sending...
-                            </>
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                           ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                              Send Invite
-                            </>
+                            <Mail className="h-4 w-4" />
                           )}
+                          Send invite
                         </button>
                       )}
-                      {status === 'error' && (
-                        <p className="text-red-500 text-xs mt-1.5 text-right">Failed — try again</p>
-                      )}
+                      {status === 'error' && <p className="text-sm text-rose-500">Failed — try again</p>}
                     </div>
                   </div>
                 )

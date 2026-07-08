@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, ArrowRight, Sparkles } from 'lucide-react'
 import api from '../../api/axios'
 import { SkillSummaryRow, getSkillBadgeClass } from '../../types/hr'
 
@@ -76,15 +77,16 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
     })
     .sort((a, b) => (a.employee_id || '').localeCompare(b.employee_id || '', 'en', { numeric: true }))
 
-  // expose generateExcel so the parent header button can call it
   ;(EmployeeListSection as any)._generateExcel = generateExcel
 
   if (loading) {
     return (
-      <div className="flex-1 overflow-y-auto px-6 py-6 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Loading employees...</p>
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="flex min-h-[60vh] items-center justify-center rounded-[28px] border border-violet-100 bg-white/80 p-8 shadow-[0_20px_60px_-25px_rgba(109,40,217,0.25)] backdrop-blur">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+            <p className="text-sm text-slate-500">Loading employee profiles…</p>
+          </div>
         </div>
       </div>
     )
@@ -92,10 +94,15 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
 
   if (allEmployees.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto px-6 py-6 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center max-w-xl">
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">No skill profiles yet</h3>
-          <p className="text-gray-400 text-sm">Employees will appear here once they have filled in their Skill Profile.</p>
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto flex max-w-2xl items-center justify-center rounded-[30px] border border-violet-100 bg-white/80 p-10 text-center shadow-[0_20px_60px_-25px_rgba(109,40,217,0.25)] backdrop-blur">
+          <div>
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+              <BriefcaseBusiness className="h-7 w-7" />
+            </div>
+            <h3 className="mb-2 text-lg font-semibold text-slate-800">No skill profiles yet</h3>
+            <p className="text-sm text-slate-500">Employees will appear here once they share their skill profile.</p>
+          </div>
         </div>
       </div>
     )
@@ -103,154 +110,178 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        {/* Toolbar */}
-        <div className="flex items-center justify-between mb-4 gap-4">
-          <h2 className="text-base font-semibold text-gray-800 whitespace-nowrap">
-            {filteredEmployees.length}
-            {filteredEmployees.length !== allEmployeesCount && ` of ${allEmployeesCount}`}
-            {' '}Employee{allEmployeesCount !== 1 ? 's' : ''}
-          </h2>
-          <div className="relative max-w-xs w-full">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
-            </svg>
-            <input
-              type="text"
-              value={employeeSearch}
-              onChange={e => setEmployeeSearch(e.target.value)}
-              placeholder="Search name, skill, email…"
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 placeholder-gray-400 bg-white"
-            />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-left bg-gray-50/80">
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">#</th>
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Employee</th>
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Designation</th>
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Current Skill</th>
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Total Exp</th>
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Skill Exp</th>
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Resume</th>
-                  <th className="px-5 py-3.5 font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredEmployees.map((emp, idx) => (
-                  <tr key={emp.employee_id} className="hover:bg-blue-50/30 transition-colors duration-100 group">
-                    <td className="px-5 py-3.5 text-gray-400 text-xs whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {emp.name?.[0]?.toUpperCase() || '?'}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-gray-800 truncate max-w-[160px]">{emp.name}</p>
-                          <p className="text-gray-400 text-xs truncate max-w-[160px]">{emp.email}</p>
-                          <p className="text-gray-300 text-xs">{emp.employee_id}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-gray-600 whitespace-nowrap max-w-[180px] truncate">
-                      {emp.current_designation || <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      {emp.current_skill ? (
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getSkillBadgeClass(emp.current_skill)}`}>
-                          {emp.current_skill}
-                        </span>
-                      ) : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      {emp.total_exp !== '' && emp.total_exp !== undefined ? (
-                        <span className="text-gray-700 font-medium">{emp.total_exp} <span className="text-gray-400 font-normal text-xs">yrs</span></span>
-                      ) : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      {emp.current_skill_exp !== '' && emp.current_skill_exp !== undefined ? (
-                        <span className="text-gray-700 font-medium">{emp.current_skill_exp} <span className="text-gray-400 font-normal text-xs">yrs</span></span>
-                      ) : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      {emp.resume_path ? (
-                        <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-100 text-xs font-medium px-2.5 py-1 rounded-full">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Uploaded
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 bg-gray-50 text-gray-400 border border-gray-100 text-xs font-medium px-2.5 py-1 rounded-full">
-                          Pending
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      <button
-                        onClick={() => setDeleteTarget(emp)}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition"
-                        title="Delete employee"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredEmployees.length === 0 && employeeSearch && (
-              <div className="py-12 text-center text-gray-400 text-sm">
-                No employees match "<span className="font-medium text-gray-600">{employeeSearch}</span>"
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto max-w-7xl space-y-5">
+          <div className="rounded-[30px] border border-violet-100 bg-gradient-to-br from-violet-600 via-indigo-600 to-slate-900 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
+                  <Sparkles className="h-4 w-4" />
+                  Talent directory
+                </div>
+                <h2 className="text-2xl font-semibold">{filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} in view</h2>
+                <p className="mt-2 text-sm text-violet-100">
+                  {allEmployeesCount} profiles available with searchable skills and resumes.
+                </p>
               </div>
-            )}
+              <div className="relative w-full max-w-sm">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                <input
+                  type="text"
+                  value={employeeSearch}
+                  onChange={e => setEmployeeSearch(e.target.value)}
+                  placeholder="Search name, skill, email…"
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-violet-100 outline-none ring-0 backdrop-blur transition focus:bg-white/15"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-[24px] border border-violet-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-violet-50 p-2.5 text-violet-600">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Total employees</p>
+                  <p className="text-xl font-semibold text-slate-800">{allEmployeesCount}</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-[24px] border border-emerald-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-emerald-50 p-2.5 text-emerald-600">
+                  <BadgeCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Resume ready</p>
+                  <p className="text-xl font-semibold text-slate-800">{allEmployees.filter(emp => emp.resume_path).length}</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-[24px] border border-sky-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-sky-50 p-2.5 text-sky-600">
+                  <BriefcaseBusiness className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Visible now</p>
+                  <p className="text-xl font-semibold text-slate-800">{filteredEmployees.length}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.25)]">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                    <th className="px-5 py-3.5">Employee</th>
+                    <th className="px-5 py-3.5">Designation</th>
+                    <th className="px-5 py-3.5">Current Skill</th>
+                    <th className="px-5 py-3.5">Experience</th>
+                    <th className="px-5 py-3.5">Resume</th>
+                    <th className="px-5 py-3.5">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredEmployees.map((emp) => (
+                    <tr key={emp.employee_id} className="transition-colors duration-150 hover:bg-violet-50/40">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-sm font-semibold text-white">
+                            {emp.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-800">{emp.name}</p>
+                            <p className="text-xs text-slate-500">{emp.email}</p>
+                            <p className="text-[11px] text-slate-400">{emp.employee_id}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">{emp.current_designation || <span className="text-slate-400">—</span>}</td>
+                      <td className="px-5 py-4">
+                        {emp.current_skill ? (
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getSkillBadgeClass(emp.current_skill)}`}>
+                            {emp.current_skill}
+                          </span>
+                        ) : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{emp.total_exp ?? '—'} yrs</span>
+                          <span className="text-xs text-slate-400">Skill exp {emp.current_skill_exp ?? '—'} yrs</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        {emp.resume_path ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            <BadgeCheck className="h-3.5 w-3.5" />
+                            Uploaded
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+                            Pending
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <button
+                          onClick={() => setDeleteTarget(emp)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600 transition hover:border-rose-200 hover:bg-rose-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredEmployees.length === 0 && employeeSearch && (
+                <div className="py-12 text-center text-sm text-slate-500">
+                  No employees match “<span className="font-semibold text-slate-700">{employeeSearch}</span>”.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Delete confirm modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+                <Trash2 className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800 text-sm">Delete Employee</h3>
-                <p className="text-gray-400 text-xs">{deleteTarget.employee_id}</p>
+                <h3 className="text-base font-semibold text-slate-800">Delete employee</h3>
+                <p className="text-sm text-slate-500">{deleteTarget.employee_id}</p>
               </div>
             </div>
-            <p className="text-gray-600 text-sm mb-1">
-              Are you sure you want to delete <span className="font-semibold text-gray-800">{deleteTarget.name}</span>?
+            <p className="mb-1 text-sm text-slate-600">
+              Are you sure you want to remove <span className="font-semibold text-slate-800">{deleteTarget.name}</span>?
             </p>
-            <p className="text-gray-400 text-xs mb-6">
-              This will permanently remove their profile, resume data, skill summary, and generated DOCX. This action cannot be undone.
+            <p className="mb-6 text-sm text-slate-500">
+              This will permanently remove their profile, resume data, skill summary, and generated DOCX.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
                 disabled={deleteLoading}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
+                className="flex-1 rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
                 disabled={deleteLoading}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-50"
               >
-                {deleteLoading ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : 'Delete'}
+                {deleteLoading ? 'Removing…' : 'Delete'}
               </button>
             </div>
           </div>
