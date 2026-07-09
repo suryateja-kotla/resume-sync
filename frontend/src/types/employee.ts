@@ -49,6 +49,8 @@ export interface ProfileData {
   email?: string
   currentRole?: string
   department?: string
+  location?: string
+  joiningDate?: string
   hasResume?: boolean
   resume?: {
     profile_summary?: string

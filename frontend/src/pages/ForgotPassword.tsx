@@ -33,13 +33,10 @@ export default function ForgotPassword() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500 mb-4 shadow-lg">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/90 mb-4 p-2.5 shadow-lg">
+            <img src="/syncfolio-mark.svg" alt="" className="h-full w-full" />
           </div>
-          <h1 className="text-3xl font-bold text-white">ResumeSync</h1>
+          <h1 className="text-3xl font-bold text-white">SyncFolio</h1>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
