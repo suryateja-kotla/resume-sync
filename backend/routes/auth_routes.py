@@ -292,7 +292,7 @@ async def change_password(
 # ── POST /auth/forgot-password ────────────────────────────────────────────────
 
 @router.post("/forgot-password")
-@limiter.limit("3/hour")
+@limiter.limit("10/hour")
 async def forgot_password(request: Request, body: ForgotPasswordRequest):
     """
     Sends a password reset link to the given email.
@@ -331,8 +331,9 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest):
             reset_url=reset_url,
             expires_minutes=30,
         )
+        logger.info(f"Password reset email sent to {body.email}")
     except Exception as e:
-        logger.error(f"Password reset email failed for {body.email}: {e}")
+        logger.error(f"Password reset email failed for {body.email}: {type(e).__name__}: {e}", exc_info=True)
 
     await write_audit_event(
         event_type="PASSWORD_RESET_REQUESTED",
@@ -366,7 +367,7 @@ async def reset_password(body: ResetPasswordRequest):
 
     # Check expiry
     expires_at = account.get("reset_token_expires")
-    if not expires_at or datetime.now(timezone.utc) > expires_at:
+    if not expires_at or datetime.now(timezone.utc) > expires_at.replace(tzinfo=timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Reset link has expired. Please request a new one.",

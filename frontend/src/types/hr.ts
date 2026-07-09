@@ -32,6 +32,14 @@ export interface SkillRack {
   employee_count: number
 }
 
+export interface SkillHistoryEntry {
+  skill: string
+  skill_exp: number
+  designation: string
+  from: string
+  to: string
+}
+
 export interface SkillEmployee {
   employee_id: string
   name: string
@@ -42,6 +50,7 @@ export interface SkillEmployee {
   current_skill_exp: number
   primary_skill?: string
   secondary_skill?: string
+  skill_history?: SkillHistoryEntry[]
 }
 
 export interface SkillSummaryRow {

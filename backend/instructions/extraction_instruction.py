@@ -49,8 +49,9 @@ Critical rules:
 - cgpa must be a float.
 - All arrays must be arrays even if empty: [].
 - Sort work_experience with the most recent role first (ongoing/Till Date roles come first).
-- For achievements: copy every achievement, award, recognition, and project entry EXACTLY as written in the resume — word for word, including all impact lines, metrics, and descriptions. Do NOT summarize, paraphrase, condense, or reword anything. Each distinct achievement or project entry should be one string in the array.
-- For certifications: copy each certification exactly as written, including issuer and date if present.
-- For interests: copy each item exactly as written.
+- For achievements: copy every item from sections labelled "Skills & Abilities/Achievements", "Achievements", or similar headings EXACTLY as written — word for word, including all impact lines, metrics, and descriptions. Do NOT summarize, paraphrase, condense, or reword anything. Each bullet or line should be one string in the array. IMPORTANT: "Skills & Abilities/Achievements" is an achievements section, NOT a technical skills section — never put its contents into technical_skills.
+- For certifications: copy ONLY items from the "Certifications" section. Do NOT include anything from "Activities and Interests", "Skills & Abilities/Achievements", or any other section. Each certification should be one string including the issuer and date if present. If multiple certifications appear concatenated in one line (e.g. separated by "•" or "–"), split them into separate strings.
+- For interests: copy ONLY items from the "Activities and Interests" or "Interests" section. Do NOT include certifications here. Each item (hobby, activity, personal interest) should be one string in the array.
+- CRITICAL: Certifications and Activities/Interests are ALWAYS separate sections. Never mix content from one into the other, even if they appear close together in the document.
 - Return ONLY the JSON object, nothing else.
 """

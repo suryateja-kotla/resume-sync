@@ -115,7 +115,11 @@ class EmailService:
                 host=self._settings.smtp_host, port=self._settings.smtp_port
             ) as client:
                 self._maybe_authenticate(client)
-                client.send_message(message)
+                refused = client.send_message(message)
+                if refused:
+                    logger.error("SMTP: recipients refused by server: %s", refused)
+                else:
+                    logger.info("SMTP: message accepted by server for %s", recipient)
             return
 
         with smtplib.SMTP(
@@ -124,7 +128,11 @@ class EmailService:
             if self._settings.smtp_use_tls:
                 client.starttls()
             self._maybe_authenticate(client)
-            client.send_message(message)
+            refused = client.send_message(message)
+            if refused:
+                logger.error("SMTP: recipients refused by server: %s", refused)
+            else:
+                logger.info("SMTP: message accepted by server for %s", recipient)
 
     def _maybe_authenticate(self, client: smtplib.SMTP) -> None:
         if self._settings.smtp_username and self._settings.smtp_password:

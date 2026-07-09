@@ -33,7 +33,7 @@ class Education(BaseModel):
     year: Optional[str] = None
     institution: str
     stream: str
-    cgpa: float
+    cgpa: Optional[float] = 0.0
 
 
 class EmployeePayload(BaseModel):
