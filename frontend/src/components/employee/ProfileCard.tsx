@@ -1,194 +1,445 @@
-import { ProfileData, SkillSummary, groupWorkExperience, initials } from '../../types/employee'
-import { IconEdit, SectionCard } from './ui'
+import {
+  ProfileData,
+  SkillSummary,
+  groupWorkExperience,
+  initials,
+} from "../../types/employee";
+import { IconEdit, SectionCard } from "./ui";
 
-interface CompletenessItem { label: string; done: boolean }
-
-interface Props {
-  displayName: string
-  profile: ProfileData | null
-  skillSummary: SkillSummary | null
-  skillSummaryLoading: boolean
-  completeness: CompletenessItem[]
-  completePct: number
-  onEditSkillProfile: () => void
-  onBenchToggle: () => void
+interface CompletenessItem {
+  label: string;
+  done: boolean;
 }
 
+interface Props {
+  displayName: string;
+  profile: ProfileData | null;
+  skillSummary: SkillSummary | null;
+  skillSummaryLoading: boolean;
+  completeness: CompletenessItem[];
+  completePct: number;
+  onEditSkillProfile: () => void;
+  onEditProfile?: () => void;
+}
+
+const IconMapPin = () => (
+  <svg
+    className="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+    />
+  </svg>
+);
+
+const IconCalendar = () => (
+  <svg
+    className="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+    />
+  </svg>
+);
+
 export default function ProfileCard({
-  displayName, profile, skillSummary, skillSummaryLoading,
-  completeness, completePct, onEditSkillProfile, onBenchToggle,
+  displayName,
+  profile,
+  skillSummary,
+  skillSummaryLoading,
+  completeness,
+  completePct,
+  onEditSkillProfile,
+  onEditProfile,
 }: Props) {
-  const resume = profile?.resume
+  const resume = profile?.resume;
 
   return (
-    <div className="w-64 flex-shrink-0 flex flex-col gap-4 sticky top-[57px]">
-
-      {/* Profile card */}
-      <SectionCard>
-        <div className="h-16 bg-gradient-to-r from-blue-700 to-violet-600 rounded-t-2xl" />
-        <div className="px-4 pb-5">
-          <div className="flex items-end gap-3 -mt-7 mb-3">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 border-3 border-white flex items-center justify-center text-white text-xl font-bold flex-shrink-0"
-              style={{ border: '3px solid white' }}>
-              {initials(displayName)}
+    <div className="w-[370px] xl:w-[390px] flex-shrink-0 flex flex-col gap-5 sticky top-[84px]">
+      {/* Profile Card */}
+      <SectionCard className="overflow-hidden p-0 hover:shadow-2xl transition-all duration-300">
+        {/* Banner */}
+        <div className="relative h-32 bg-gradient-to-r from-blue-700 via-indigo-600 to-violet-600">
+          {/* Avatar */}
+          <div className="absolute -bottom-14 left-1/2 -translate-x-1/2">
+            <div className="w-28 h-28 rounded-full bg-white p-1 shadow-xl">
+              <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-4xl font-bold">
+                {initials(displayName)}
+              </div>
             </div>
           </div>
-          <p className="text-[15px] font-bold text-gray-800 leading-tight">{displayName || '—'}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {skillSummary?.current_designation || profile?.currentRole || 'Employee'}
-          </p>
-          <p className="text-[11px] text-gray-400 mt-0.5 truncate">{profile?.email}</p>
+        </div>
 
-          <div className="flex flex-wrap gap-1.5 mt-3">
+        {/* Content */}
+        <div className="pt-20 pb-6 px-6">
+          {/* Name */}
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-800 leading-tight">
+              {displayName || "Employee"}
+            </h2>
+
+            <p className="mt-2 text-lg font-medium text-gray-600">
+              {skillSummary?.current_designation ||
+                profile?.currentRole ||
+                "Software Engineer"}
+            </p>
+
+            <p className="text-sm text-gray-400 mt-1">
+              {profile?.employeeId || profile?.employee_id || ""}
+            </p>
+          </div>
+
+          {/* Contact */}
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <svg
+                className="w-5 h-5 text-blue-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 8l9 6 9-6"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 8v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8"
+                />
+              </svg>
+
+              <span className="truncate">{profile?.email}</span>
+            </div>
+
+            {profile?.department && (
+              <div className="flex items-center gap-3 text-sm text-gray-600">
+                <svg
+                  className="w-5 h-5 text-violet-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 21h16M4 10l8-6 8 6M6 10v8m4-8v8m4-8v8m4-8v8"
+                  />
+                </svg>
+
+                {profile.department}
+              </div>
+            )}
+          </div>
+
+          {/* Badges */}
+
+          <div className="flex flex-wrap justify-center gap-2 mt-6">
             {skillSummary?.current_skill && (
-              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              <span className="px-4 py-2 rounded-full bg-blue-100 text-blue-700 font-semibold text-xs">
                 {skillSummary.current_skill}
               </span>
             )}
-            {profile?.department && (
-              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">
-                {profile.department}
-              </span>
-            )}
-            <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
-              skillSummary?.is_on_bench
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-green-50 text-green-700 border-green-200'
-            }`}>
-              {skillSummary?.is_on_bench ? 'On Bench' : 'Active'}
+
+            <span
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold ${
+                skillSummary?.is_on_bench
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  skillSummary?.is_on_bench ? "bg-amber-500" : "bg-slate-400"
+                }`}
+              />
+              {skillSummary?.is_on_bench ? "On Bench" : "Available"}
             </span>
           </div>
 
-          <div className="flex justify-between mt-4 pt-4 border-t border-gray-100">
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800 tabular-nums">
-                {skillSummary?.total_exp ?? resume?.total_experience ?? '—'}
+          {/* Statistics */}
+
+          <div className="grid grid-cols-3 gap-3 mt-8">
+            <div className="rounded-2xl bg-blue-50 p-4 text-center">
+              <p className="text-2xl font-bold text-blue-700">
+                {skillSummary?.total_exp ?? resume?.total_experience ?? "—"}
               </p>
-              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mt-0.5">Yrs Exp</p>
+
+              <p className="text-xs mt-1 text-gray-500">Experience</p>
             </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800 tabular-nums">
-                {resume?.work_experience ? groupWorkExperience(resume.work_experience).length : '—'}
+
+            <div className="rounded-2xl bg-violet-50 p-4 text-center">
+              <p className="text-2xl font-bold text-violet-700">
+                {resume?.work_experience
+                  ? groupWorkExperience(resume.work_experience).length
+                  : "—"}
               </p>
-              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mt-0.5">Companies</p>
+
+              <p className="text-xs mt-1 text-gray-500">Companies</p>
             </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-gray-800 tabular-nums">
-                {resume?.technical_skills ? Object.values(resume.technical_skills).flat().length : '—'}
+
+            <div className="rounded-2xl bg-green-50 p-4 text-center">
+              <p className="text-2xl font-bold text-green-700">
+                {resume?.technical_skills
+                  ? Object.values(resume.technical_skills).flat().length
+                  : "—"}
               </p>
-              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mt-0.5">Skills</p>
+
+              <p className="text-xs mt-1 text-gray-500">Skills</p>
             </div>
           </div>
         </div>
       </SectionCard>
 
-      {/* Profile completeness */}
-      <SectionCard>
-        <div className="px-4 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Profile Strength</p>
-          <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16 flex-shrink-0">
-              <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
-                <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f1f5f9" strokeWidth="3" />
-                <circle cx="18" cy="18" r="15.5" fill="none"
-                  stroke={completePct >= 80 ? '#16a34a' : completePct >= 50 ? '#d97706' : '#e5e7eb'}
-                  strokeWidth="3"
-                  strokeDasharray={`${completePct} 100`}
-                  strokeLinecap="round"
-                />
+{/* Profile Completion */}
+<SectionCard className="overflow-hidden">
+
+  <div className="px-6 py-6">
+
+    {/* Header */}
+
+    <div className="flex items-center justify-between gap-3">
+
+      <p className="text-xs uppercase tracking-[0.25em] text-slate-400 font-bold">
+        Profile Completion
+      </p>
+
+      <span
+        className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+          completePct >= 90
+            ? "bg-emerald-100 text-emerald-700"
+            : completePct >= 70
+            ? "bg-violet-100 text-violet-700"
+            : "bg-amber-100 text-amber-700"
+        }`}
+      >
+        {completePct >= 90
+          ? "Excellent"
+          : completePct >= 70
+          ? "Good"
+          : "Needs Improvement"}
+      </span>
+
+    </div>
+
+    <div className="mt-1 flex items-baseline gap-1.5">
+      <span className="text-3xl font-extrabold text-slate-800">{completePct}%</span>
+      <span className="text-sm text-slate-400">
+        · {completeness.filter(c => c.done).length} of {completeness.length} sections
+      </span>
+    </div>
+
+    {/* Progress */}
+
+    <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+      <div
+        className="h-full rounded-full bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600 transition-all duration-500"
+        style={{ width: `${completePct}%` }}
+      />
+    </div>
+
+    {/* Checklist — always visible, no expand/collapse */}
+
+    <div className="mt-4 grid grid-cols-2 gap-2">
+      {completeness.map(item => (
+        <div
+          key={item.label}
+          className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${
+            item.done
+              ? "border-emerald-100 bg-emerald-50"
+              : "border-amber-100 bg-amber-50"
+          }`}
+        >
+          <span
+            className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
+              item.done
+                ? "bg-emerald-100 text-emerald-600"
+                : "bg-amber-100 text-amber-600"
+            }`}
+          >
+            {item.done ? (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-700">
-                {completePct}%
-              </span>
-            </div>
-            <div className="flex flex-col gap-1.5 flex-1">
-              {completeness.map(c => (
-                <div key={c.label} className="flex items-center gap-1.5">
-                  <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    c.done ? 'bg-green-100' : 'bg-amber-100'
-                  }`}>
-                    {c.done ? (
-                      <svg className="w-2.5 h-2.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="w-2.5 h-2.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4m0 4h.01" />
-                      </svg>
-                    )}
-                  </div>
-                  <span className={`text-[11px] font-medium ${c.done ? 'text-gray-500' : 'text-amber-600'}`}>
-                    {c.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+            ) : (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v4m0 4h.01" />
+              </svg>
+            )}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">
+            {item.label}
+          </span>
         </div>
-      </SectionCard>
+      ))}
+    </div>
+
+    {/* Suggestion */}
+
+    {completeness.some(c => !c.done) && (
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <p className="text-sm font-medium text-amber-700">
+          Complete{" "}
+          <span className="font-bold">
+            {completeness.find(c => !c.done)?.label}
+          </span>
+          {" "}to improve your profile.
+        </p>
+      </div>
+    )}
+
+  </div>
+
+</SectionCard>
 
       {/* Skill Profile card */}
-      <SectionCard>
-        <div className="px-4 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Skill Profile</p>
+      {/* Skill Profile */}
+      <SectionCard className="overflow-hidden">
+        <div className="px-6 py-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-gray-400 font-bold">
+                Skill Profile
+              </p>
+
+              <h3 className="text-lg font-bold text-gray-800 mt-1">
+                Professional Details
+              </h3>
+            </div>
+
             <button
               onClick={onEditSkillProfile}
-              className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 border border-gray-200 rounded-lg px-2 py-1 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+              className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition"
             >
-              <IconEdit /> Edit
+              <IconEdit />
+              Edit
             </button>
           </div>
+
           {skillSummaryLoading ? (
-            <div className="flex items-center gap-2 py-2">
-              <div className="w-4 h-4 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-gray-400">Loading…</span>
+            <div className="flex justify-center py-10">
+              <div className="w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Current Skill</p>
-                <p className="text-xs font-semibold text-blue-700 truncate">{skillSummary?.current_skill || '—'}</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Skill Exp</p>
-                <p className="text-xs font-semibold text-gray-700">{skillSummary?.current_skill_exp ?? '—'} yrs</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Primary</p>
-                <p className="text-xs font-semibold text-gray-700 truncate">{skillSummary?.primary_skill || '—'}</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Secondary</p>
-                <p className="text-xs font-semibold text-gray-700 truncate">{skillSummary?.secondary_skill || '—'}</p>
+            <>
+              {/* Skill Cards */}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <p className="text-xs uppercase text-blue-500 font-semibold">
+                    Current Skill
+                  </p>
+
+                  <p className="mt-2 font-bold text-gray-800 text-lg">
+                    {skillSummary?.current_skill || "—"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
+                  <p className="text-xs uppercase text-violet-500 font-semibold">
+                    Skill Experience
+                  </p>
+
+                  <p className="mt-2 font-bold text-gray-800 text-lg">
+                    {skillSummary?.current_skill_exp ?? "—"} yrs
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+                  <p className="text-xs uppercase text-green-600 font-semibold">
+                    Primary Skill
+                  </p>
+
+                  <p className="mt-2 font-bold text-gray-800">
+                    {skillSummary?.primary_skill || "—"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                  <p className="text-xs uppercase text-orange-600 font-semibold">
+                    Secondary Skill
+                  </p>
+
+                  <p className="mt-2 font-bold text-gray-800">
+                    {skillSummary?.secondary_skill || "—"}
+                  </p>
+                </div>
               </div>
 
-              {/* Bench toggle */}
+              {/* Divider */}
+
+              <div className="my-6 border-t border-gray-100" />
+
+              {/* Bench Status */}
+
               <div
-                onClick={onBenchToggle}
-                className={`col-span-2 flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
-                  skillSummary?.is_on_bench ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100 hover:border-gray-200'
+                className={`rounded-2xl p-5 border transition-all duration-300 ${
+                  skillSummary?.is_on_bench
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-slate-200 bg-slate-50"
                 }`}
               >
-                <div>
-                  <p className={`text-[11px] font-bold ${skillSummary?.is_on_bench ? 'text-amber-700' : 'text-gray-600'}`}>
-                    {skillSummary?.is_on_bench ? 'On Bench' : 'Available on Bench?'}
-                  </p>
-                  <p className="text-[10px] text-gray-400">Toggle to notify HR</p>
-                </div>
-                <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 flex-shrink-0 ${
-                  skillSummary?.is_on_bench ? 'bg-amber-400' : 'bg-gray-200'
-                }`}>
-                  <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    skillSummary?.is_on_bench ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold text-gray-800">
+                      {skillSummary?.is_on_bench
+                        ? "Available for Allocation"
+                        : "Currently Assigned"}
+                    </h4>
+
+                    <p className="text-sm text-gray-500 mt-1">
+                      {skillSummary?.is_on_bench
+                        ? "HR can assign you to new projects."
+                        : "Click Edit above to change your bench status."}
+                    </p>
+                  </div>
+
+                  {/* Read-only status indicator — actual toggling happens in the edit modal */}
+
+                  <div
+                    className={`w-14 h-8 rounded-full flex items-center px-1 opacity-70 ${
+                      skillSummary?.is_on_bench
+                        ? "bg-amber-400"
+                        : "bg-slate-300"
+                    }`}
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-full bg-white shadow-md transition-all ${
+                        skillSummary?.is_on_bench ? "translate-x-6" : ""
+                      }`}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+
+             
+            </>
           )}
         </div>
       </SectionCard>
-
     </div>
-  )
+  );
 }

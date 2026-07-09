@@ -97,21 +97,24 @@ export default function ExperienceSection({ workExperience, onEdit }: Props) {
                             </button>
 
                             {openProjects.has(key) && proj && (
-                              <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
+                              <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-4">
                                 {proj.project_description && (
-                                  <p className="text-xs text-gray-600 leading-relaxed">{proj.project_description}</p>
+                                  <p className="text-[15px] text-gray-600 leading-relaxed">{proj.project_description}</p>
                                 )}
                                 {proj.environment && proj.environment.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5">
+                                  <div className="flex flex-wrap gap-2">
                                     {proj.environment.map((sk, k) => (
-                                      <span key={k} className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full font-medium">{sk}</span>
+                                      <span key={k} className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-100 text-xs px-3 py-1.5 rounded-full font-medium">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                                        {sk}
+                                      </span>
                                     ))}
                                   </div>
                                 )}
                                 {proj.responsibilities && proj.responsibilities.length > 0 && (
                                   <ul className="space-y-1">
                                     {proj.responsibilities.map((r, k) => (
-                                      <li key={k} className="flex items-start gap-1.5 text-xs text-gray-600">
+                                      <li key={k} className="flex items-start gap-1.5 text-[15px] text-gray-600 leading-relaxed">
                                         <span className="text-blue-400 mt-0.5 flex-shrink-0">›</span>{r}
                                       </li>
                                     ))}
@@ -130,7 +133,7 @@ export default function ExperienceSection({ workExperience, onEdit }: Props) {
           )}
         </div>
       ) : (
-        <div className="px-5 py-4">
+        <div className="px-6 py-6">
           <p className="text-sm text-gray-300 italic">No work experience added yet.</p>
         </div>
       )}

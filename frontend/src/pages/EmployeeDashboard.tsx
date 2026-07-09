@@ -6,9 +6,9 @@ import {
   ProfileData, SkillSummary, ActiveModal,
   WorkExperienceItem, WorkExpEdit, ProjectInEntry,
 } from '../types/employee'
-import { initials } from '../types/employee'
 
 // Section components
+import Navbar from '../components/employee/Navbar'
 import ProfileCard from '../components/employee/ProfileCard'
 import SummarySection from '../components/employee/SummarySection'
 import SkillsSection from '../components/employee/SkillsSection'
@@ -17,6 +17,7 @@ import EducationSection from '../components/employee/EducationSection'
 import CertsAndAchievements from '../components/employee/CertsAndAchievements'
 import SkillHistory from '../components/employee/SkillHistory'
 import UploadView from '../components/employee/UploadView'
+import WelcomeBanner from '../components/employee/WelcomeBanner'
 import {
   SummaryModal, SkillsModal, ExperienceModal,
   CertsModal, AchievementsModal, SkillProfileModal,
@@ -34,6 +35,15 @@ const completenessItems = (resume?: ProfileData['resume'], skill?: SkillSummary 
   { label: 'Certifications', done: !!resume?.certifications && resume.certifications.length > 0 },
   { label: 'Skill Profile',  done: !!skill?.current_skill },
 ]
+
+const labelToModal: Record<string, ActiveModal> = {
+  'Summary': 'summary',
+  'Skills': 'skills',
+  'Experience': 'experience',
+  'Education': 'education',
+  'Certifications': 'certs',
+  'Skill Profile': 'skillprofile',
+}
 
 // ── Work experience edit helpers ───────────────────────────────────────────────
 
@@ -376,24 +386,6 @@ export default function EmployeeDashboard() {
     }
   }
 
-  // ── Bench toggle ───────────────────────────────────────────────────────────
-
-  const handleBenchToggle = () => {
-    if (!skillSummary) return
-    const next = !skillSummary.is_on_bench
-    setSkillSummary(s => s ? { ...s, is_on_bench: next } : s)
-    api.put('/employee-skill-summary', {
-      email: user!.email,
-      current_designation: skillSummary.current_designation,
-      current_skill: skillSummary.current_skill,
-      total_exp: skillSummary.total_exp,
-      current_skill_exp: skillSummary.current_skill_exp,
-      primary_skill: skillSummary.primary_skill,
-      secondary_skill: skillSummary.secondary_skill,
-      is_on_bench: next,
-    }).catch(() => setSkillSummary(s => s ? { ...s, is_on_bench: !next } : s))
-  }
-
   // ── Work experience accordion handlers ─────────────────────────────────────
 
   const updateWorkExp = (idx: number, field: keyof Omit<WorkExpEdit, 'projects'>, value: string) =>
@@ -468,55 +460,21 @@ export default function EmployeeDashboard() {
   const displayName = skillSummary?.name || user?.fullName || resume?.personal_info?.full_name || user?.email || ''
   const completeness = completenessItems(resume, skillSummary)
   const completePct = Math.round((completeness.filter(c => c.done).length / completeness.length) * 100)
+  const firstPending = completeness.find(c => !c.done)
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#F6F8FC] flex flex-col">
 
       {/* Topbar */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
-        <div className="max-w-screen-xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <span className="font-bold text-gray-800 text-[15px]">ResumeSync</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {hasResume && (
-              <div className="hidden sm:flex items-center gap-1 text-xs text-gray-400">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                Profile Active
-              </div>
-            )}
-            <div className="hidden sm:block text-right">
-              <p className="text-sm font-semibold text-gray-700">{user?.fullName || user?.email}</p>
-              <p className="text-xs text-gray-400">{user?.employeeId}</p>
-            </div>
-            <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {initials(user?.fullName || user?.email)}
-            </div>
-            <button onClick={() => navigate('/change-password')} title="Change password"
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-              </svg>
-            </button>
-            <button onClick={handleLogout} title="Sign out"
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Navbar
+        fullName={user?.fullName || undefined}
+        email={user?.email}
+        employeeId={user?.employeeId || undefined}
+        onChangePassword={() => navigate('/change-password')}
+        onLogout={handleLogout}
+      />
 
       {/* Canvas */}
       {showUpload && !hasResume ? (
@@ -536,7 +494,20 @@ export default function EmployeeDashboard() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 max-w-screen-xl mx-auto w-full px-6 py-6 flex gap-5 items-start">
+        <div className="flex-1 max-w-screen-xl mx-auto w-full px-6 py-6 flex flex-col gap-5">
+
+          {resume && (
+            <WelcomeBanner
+              name={displayName}
+              completePct={completePct}
+              pendingLabel={firstPending?.label}
+              onCtaClick={
+                firstPending ? () => openModal(labelToModal[firstPending.label]) : undefined
+              }
+            />
+          )}
+
+          <div className="flex gap-5 items-start">
 
           {/* Left column */}
           <ProfileCard
@@ -547,11 +518,10 @@ export default function EmployeeDashboard() {
             completeness={completeness}
             completePct={completePct}
             onEditSkillProfile={() => openModal('skillprofile')}
-            onBenchToggle={handleBenchToggle}
           />
 
           {/* Right column */}
-          <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <div className="flex-1 min-w-0 flex flex-col gap-6">
             {saveMsg && !activeModal && (
               <div className={`px-4 py-3 rounded-xl text-sm border ${
                 saveMsg.includes('success')
@@ -607,15 +577,15 @@ export default function EmployeeDashboard() {
                 />
                 {/* Interests */}
                 {(resume.interests && resume.interests.length > 0) && (
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                  <div className="bg-white rounded-2xl border border-[#ECEEF2] shadow-[0_10px_30px_rgba(0,0,0,0.06)] overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
                       <div className="flex items-center gap-2.5">
                         <span className="text-blue-600">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                           </svg>
                         </span>
-                        <span className="text-sm font-bold text-gray-800">Interests</span>
+                        <span className="text-lg font-bold text-gray-800 leading-snug">Interests</span>
                       </div>
                       <button onClick={() => openModal('interests')}
                         className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
@@ -625,9 +595,9 @@ export default function EmployeeDashboard() {
                         Edit
                       </button>
                     </div>
-                    <div className="px-5 py-4 flex flex-wrap gap-2">
+                    <div className="px-6 py-6 flex flex-wrap gap-2">
                       {resume.interests.map((interest, i) => (
-                        <span key={i} className="bg-pink-50 text-pink-700 border border-pink-100 text-xs font-medium px-3 py-1 rounded-full">
+                        <span key={i} className="bg-pink-50 text-pink-700 border border-pink-100 text-xs font-medium px-3 py-1.5 rounded-full">
                           {interest}
                         </span>
                       ))}
@@ -650,6 +620,7 @@ export default function EmployeeDashboard() {
             {skillSummary?.skill_history && skillSummary.skill_history.length > 0 && (
               <SkillHistory history={skillSummary.skill_history} />
             )}
+          </div>
           </div>
         </div>
       )}

@@ -60,13 +60,10 @@ export default function HRDashboard() {
         {/* Logo */}
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+            <div className="w-8 h-8 rounded-lg bg-white/90 flex items-center justify-center p-1">
+              <img src="/syncfolio-mark.svg" alt="" className="h-full w-full" />
             </div>
-            <span className="text-white font-bold text-lg">ResumeSync</span>
+            <span className="text-white font-bold text-lg">SyncFolio</span>
           </div>
         </div>
 
