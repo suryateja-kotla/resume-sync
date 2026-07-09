@@ -10,6 +10,7 @@ from services.db_service import (
     get_employee_resume_data,
     save_employee_resume_data,
     write_audit_event,
+    get_resume_path,
 )
 from instructions.extraction_instruction import EXTRACTION_INSTRUCTION
 
@@ -220,15 +221,150 @@ _TEMPLATE_PATH = os.getenv(
 _OUTPUT_DIR = os.getenv("RESUME_OUTPUT_DIR", "output")
 
 
+def _parse_gemini_json(raw: str) -> dict:
+    """
+    Parse JSON from Gemini output, tolerating common LLM formatting issues:
+    - Markdown code fences (```json ... ```)
+    - Trailing commas before } or ]  (JSON spec violation Gemini sometimes emits)
+    - Truncated output (finds the last valid closing brace)
+    """
+    import re
+
+    # Strip markdown fences
+    text = raw.strip()
+    text = re.sub(r'^```(?:json)?\s*', '', text)
+    text = re.sub(r'\s*```$', '', text)
+    text = text.strip()
+
+    # Remove trailing commas before } or ] (e.g. ,\n} or ,})
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Truncated JSON — try to close open braces/brackets and re-parse
+        # Count unmatched openers and append the right closers
+        opens = []
+        in_string = False
+        escape = False
+        for ch in text:
+            if escape:
+                escape = False
+                continue
+            if ch == '\\' and in_string:
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch in ('{', '['):
+                opens.append('}' if ch == '{' else ']')
+            elif ch in ('}', ']') and opens:
+                opens.pop()
+
+        # Strip any trailing comma before we close
+        repaired = text.rstrip().rstrip(',')
+        for closer in reversed(opens):
+            repaired += closer
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            raise json.JSONDecodeError("Could not repair JSON from Gemini output", text, 0)
+
+
+def _clean_extracted(extracted: dict, employee_id: str) -> dict:
+    """Normalise raw Gemini output: set employee_id, sanitise keys, strip nulls, drop stubs."""
+    extracted["employee_id"] = employee_id
+
+    # Sanitise MongoDB-unsafe characters in technical_skills keys
+    if isinstance(extracted.get("technical_skills"), dict):
+        extracted["technical_skills"] = {
+            str(k).replace(".", "_").replace("$", ""): v
+            for k, v in extracted["technical_skills"].items()
+        }
+
+    # Replace all None values with empty strings so Pydantic is happy
+    def _strip_nulls(data):
+        if isinstance(data, dict):
+            return {k: _strip_nulls(v) if v is not None else "" for k, v in data.items()}
+        if isinstance(data, list):
+            return [_strip_nulls(i) if i is not None else "" for i in data]
+        return data
+
+    extracted = _strip_nulls(extracted)
+
+    # Sanitise education.cgpa — Gemini sometimes omits it or sends empty string
+    for edu in extracted.get("education", []):
+        if isinstance(edu, dict):
+            raw_cgpa = edu.get("cgpa", 0.0)
+            try:
+                edu["cgpa"] = float(raw_cgpa) if raw_cgpa not in ("", None) else 0.0
+            except (ValueError, TypeError):
+                edu["cgpa"] = 0.0
+
+    # Ensure project_description is always present
+    for we in extracted.get("work_experience", []):
+        proj = we.get("project")
+        if isinstance(proj, dict) and "project_description" not in proj:
+            proj["project_description"] = ""
+
+    # Drop company-header stub entries Gemini creates above each project block.
+    # A stub has: project.name == designation AND no responsibilities AND no
+    # description AND no environment — all four must be true to avoid dropping
+    # real fresher entries where Gemini uses designation as project.name fallback.
+    if isinstance(extracted.get("work_experience"), list):
+        def _is_header_stub(entry: dict) -> bool:
+            proj = entry.get("project", {})
+            proj_name = (proj.get("name") or "").strip()
+            designation = (entry.get("designation") or "").strip()
+            responsibilities = proj.get("responsibilities") or []
+            description = (proj.get("project_description") or "").strip()
+            environment = proj.get("environment") or []
+            return (
+                proj_name == designation
+                and len(responsibilities) == 0
+                and not description
+                and len(environment) == 0
+            )
+        extracted["work_experience"] = [
+            e for e in extracted["work_experience"] if not _is_header_stub(e)
+        ]
+
+    return extracted
+
+
+def _missing_fields(extracted: dict) -> list[str]:
+    """Return names of critical fields that are empty after extraction."""
+    missing = []
+    if not (extracted.get("personal_info") or {}).get("full_name", "").strip():
+        missing.append("personal_info.full_name")
+    if not extracted.get("work_experience"):
+        missing.append("work_experience")
+    if not extracted.get("technical_skills"):
+        missing.append("technical_skills")
+    if not extracted.get("profile_summary", "").strip():
+        missing.append("profile_summary")
+    return missing
+
+
+_RETRY_INSTRUCTION_SUFFIX = """
+IMPORTANT: The previous extraction attempt returned empty or missing values for: {missing}.
+Look carefully through ALL text AND every embedded image for this information.
+For technical_skills: check every image, table, sidebar, and list — skill data is often in image form.
+Do NOT return empty arrays or empty objects for these fields.
+"""
+
+
 async def extract_resume(
     employee_id: str,
     file_path: str = "",
 ) -> dict:
     """
     Extracts structured data from a resume file (PDF or DOCX) located at file_path.
-    Args:
-        employee_id: The unique employee ID to associate with the data.
-        file_path: The absolute local path to the PDF or DOCX file.
+    Validates critical fields after extraction and retries with a targeted prompt
+    if any are missing, before saving to the database.
     """
     if not file_path or not os.path.exists(file_path):
         return {
@@ -239,73 +375,55 @@ async def extract_resume(
     try:
         file_extension = os.path.splitext(file_path)[1].lower()
 
+        # ── Build the Gemini content parts (reused across retries) ──────────
         if file_extension == ".pdf":
-            pdf_parts = _build_pdf_contents(file_path, employee_id)
-            raw_text = await _call_gemini_with_retry([{"role": "user", "parts": pdf_parts}])
+            base_parts = _build_pdf_contents(file_path, employee_id)
 
         elif file_extension == ".docx":
             extracted_text = _docx_tool.parse_docx_bytes(file_path)
-            raw_text = await _call_gemini_with_retry([
-                {
-                    "role": "user",
-                    "parts": [{"text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"}],
-                }
-            ])
+            embedded_images = _docx_tool.extract_embedded_images(file_path)
+            base_parts = [
+                {"text": f"{EXTRACTION_INSTRUCTION}\nUse employee_id: {employee_id}\n\nResume Text:\n{extracted_text}"}
+            ]
+            if embedded_images:
+                base_parts.append({
+                    "text": "The resume also contains the following embedded images "
+                            "(e.g. skill tables, charts). Extract any additional information from them:"
+                })
+                base_parts.extend(embedded_images)
 
         else:
-            return {
-                "status": "error",
-                "message": f"Unsupported file type: {file_extension}",
+            return {"status": "error", "message": f"Unsupported file type: {file_extension}"}
+
+        # ── First extraction attempt ─────────────────────────────────────────
+        raw_text = await _call_gemini_with_retry([{"role": "user", "parts": base_parts}])
+        extracted = _clean_extracted(_parse_gemini_json(raw_text), employee_id)
+
+        # ── Validate — retry once if critical fields are missing ─────────────
+        missing = _missing_fields(extracted)
+        if missing:
+            logger.warning(f"[{employee_id}] Missing fields after first extraction: {missing}. Retrying...")
+            retry_suffix = _RETRY_INSTRUCTION_SUFFIX.format(missing=", ".join(missing))
+            retry_parts = list(base_parts)
+            # Prepend retry note to the first text part
+            retry_parts[0] = {
+                "text": retry_parts[0]["text"] + "\n\n" + retry_suffix
             }
+            raw_text2 = await _call_gemini_with_retry([{"role": "user", "parts": retry_parts}])
+            extracted2 = _clean_extracted(_parse_gemini_json(raw_text2), employee_id)
 
-        raw_text = raw_text.strip()
+            # Merge: use retry result for fields that were missing, keep original for the rest
+            for field in missing:
+                top_key = field.split(".")[0]
+                if extracted2.get(top_key):
+                    extracted[top_key] = extracted2[top_key]
+                    logger.info(f"[{employee_id}] Recovered '{top_key}' on retry.")
 
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("```")[1]
-            if raw_text.startswith("json"):
-                raw_text = raw_text[4:]
-        raw_text = raw_text.strip()
+            still_missing = _missing_fields(extracted)
+            if still_missing:
+                logger.warning(f"[{employee_id}] Still missing after retry: {still_missing}")
 
-        extracted = json.loads(raw_text)
-        extracted["employee_id"] = employee_id
-        if "technical_skills" in extracted and isinstance(extracted["technical_skills"], dict):
-            clean_skills = {}
-            for k, v in extracted["technical_skills"].items():
-                clean_key = str(k).replace(".", "_").replace("$", "")
-                clean_skills[clean_key] = v
-            extracted["technical_skills"] = clean_skills
-
-        # CRITICAL FIX 1.5: Strip all nulls to satisfy MongoDB's strict string schemas
-        def replace_nulls_with_empty_string(data):
-            if isinstance(data, dict):
-                return {k: replace_nulls_with_empty_string(v) if v is not None else "" for k, v in data.items()}
-            elif isinstance(data, list):
-                return [replace_nulls_with_empty_string(i) if i is not None else "" for i in data]
-            return data
-
-        extracted = replace_nulls_with_empty_string(extracted)
-
-        # Ensure project_description is always present (Gemini sometimes omits it)
-        for we in extracted.get("work_experience", []):
-            proj = we.get("project")
-            if isinstance(proj, dict) and "project_description" not in proj:
-                proj["project_description"] = ""
-
-        # Drop company-header duplicate entries that Gemini creates when a resume
-        # lists a company header line above each project block. Those entries have
-        # no responsibilities and project.name == designation (the fallback we set).
-        if isinstance(extracted.get("work_experience"), list):
-            def _is_header_stub(entry: dict) -> bool:
-                proj = entry.get("project", {})
-                proj_name = (proj.get("name") or "").strip()
-                designation = (entry.get("designation") or "").strip()
-                responsibilities = proj.get("responsibilities") or []
-                return proj_name == designation and len(responsibilities) == 0
-            extracted["work_experience"] = [
-                e for e in extracted["work_experience"]
-                if not _is_header_stub(e)
-            ]
-
+        # ── Save to DB ───────────────────────────────────────────────────────
         payload = EmployeePayload(**extracted)
         await save_employee_resume_data(
             employee_id,
@@ -319,9 +437,7 @@ async def extract_resume(
             payload={"file_path": file_path},
         )
 
-        return {
-            "message": "Resume extracted and saved successfully.",
-        }
+        return {"message": "Resume extracted and saved successfully."}
 
     except json.JSONDecodeError as e:
         return {"status": "error", "message": f"Gemini returned invalid JSON: {str(e)}"}
@@ -353,11 +469,22 @@ async def generate_resume_docx(employee_id: str) -> dict:
         if norm_result["status"] == "error":
             return norm_result
 
-        # Generate DOCX
+        # Delete the old generated file if the filename will change
+        # (e.g. designation changed → new filename → stale old file)
+        old_path = await get_resume_path(employee_id)
+        if old_path and os.path.isfile(old_path):
+            new_filename = _docx_tool._build_output_filename(norm_result["data"])
+            if os.path.basename(old_path) != new_filename:
+                try:
+                    os.remove(old_path)
+                    logger.info(f"[{employee_id}] Removed stale resume: {old_path}")
+                except OSError:
+                    pass  # Non-fatal — new file will still be saved correctly
+
+        # Generate DOCX (always overwrites same filename if designation unchanged)
         gen_result = _docx_tool.generate_resume(
             template_path=_TEMPLATE_PATH,
             normalized_data=norm_result["data"],
-            employee_id=payload.employee_id,
             output_dir=_OUTPUT_DIR,
         )
 

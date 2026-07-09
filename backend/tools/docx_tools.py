@@ -1,4 +1,5 @@
-from datetime import datetime
+import base64
+import io
 import os
 from copy import deepcopy
 
@@ -13,6 +14,67 @@ class DocxTool:
     def _create_spacer(self):
         return OxmlElement("w:p")
 
+    # Known section headings that may appear inside table cells.
+    # When detected as a standalone paragraph, we insert an explicit marker
+    # so Gemini can clearly distinguish sections that share a cell.
+    _SECTION_HEADINGS = {
+        "skills & abilities/achievements",
+        "skills & abilities / achievements",
+        "skills and abilities/achievements",
+        "skills and abilities / achievements",
+        "achievements",
+        "certifications",
+        "activities and interests",
+        "activities & interests",
+        "interests",
+        "professional summary",
+        "summary",
+        "technical skills",
+        "education",
+        "work experience",
+        "experience",
+        "projects",
+        "internships",
+    }
+
+    def _is_section_heading(self, text: str) -> bool:
+        return text.strip().lower() in self._SECTION_HEADINGS
+
+    def extract_embedded_images(self, file_path: str) -> list[dict]:
+        """
+        Return all embedded images in a DOCX as Gemini inline_data parts.
+        Covers images in body paragraphs, headers, footers, and table cells.
+        Each part is {"inline_data": {"mime_type": "image/png", "data": <b64>}}.
+        """
+        from docx.oxml.ns import qn
+        from PIL import Image
+
+        doc = Document(file_path)
+        parts = []
+        seen = set()
+
+        for rel in doc.part.rels.values():
+            if "image" not in rel.reltype:
+                continue
+            try:
+                img_part = rel.target_part
+                img_bytes = img_part.blob
+                rId = rel.rId
+                if rId in seen:
+                    continue
+                seen.add(rId)
+
+                # Normalise to PNG so Gemini always gets a consistent format
+                img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
+            except Exception:
+                continue
+
+        return parts
+
     def parse_docx_bytes(self, file_path: str):
         from docx.oxml.ns import qn
 
@@ -22,22 +84,38 @@ class DocxTool:
         for block in doc.element.body:
             if block.tag == qn("w:p"):
                 text = "".join(node.text for node in block.iter(qn("w:t")) if node.text)
-                if text.strip():
-                    content.append(text.strip())
+                stripped = text.strip()
+                if not stripped:
+                    continue
+                if self._is_section_heading(stripped):
+                    if content:
+                        content.append("")
+                    content.append(f"--- {stripped.upper()} ---")
+                else:
+                    content.append(stripped)
             elif block.tag == qn("w:tbl"):
                 for row in block.findall(".//" + qn("w:tr")):
                     cells = []
                     for cell in row.findall(".//" + qn("w:tc")):
-                        # Collect each paragraph inside the cell separately so
-                        # bullet-point lines are preserved as distinct lines
-                        # rather than merged into one unreadable blob.
+                        # Collect each paragraph inside the cell separately.
+                        # Insert explicit section markers when a paragraph matches
+                        # a known heading so Gemini can split sections that share
+                        # a single table cell (e.g. Certifications + Activities).
                         para_lines = []
                         for para in cell.findall(".//" + qn("w:p")):
                             para_text = "".join(
                                 n.text for n in para.iter(qn("w:t")) if n.text
                             )
-                            if para_text.strip():
-                                para_lines.append(para_text.strip())
+                            stripped = para_text.strip()
+                            if not stripped:
+                                continue
+                            if self._is_section_heading(stripped):
+                                # Blank line before heading so it reads as a new section
+                                if para_lines:
+                                    para_lines.append("")
+                                para_lines.append(f"--- {stripped.upper()} ---")
+                            else:
+                                para_lines.append(stripped)
                         if para_lines:
                             cells.append("\n".join(para_lines))
                     if cells:
@@ -308,15 +386,41 @@ class DocxTool:
                 table._tbl.remove(template_row._tr)
                 return
 
+    @staticmethod
+    def _build_output_filename(normalized_data: dict) -> str:
+        """
+        Build a human-readable filename: {FullName}_{CurrentSkill}.docx
+        Current skill = designation from the most recent work experience.
+        Sanitises characters that are invalid in filenames.
+        """
+        import re
+
+        full_name = (normalized_data.get("FULL_NAME") or "").strip()
+
+        # Current skill = designation of the latest (first) work experience
+        exps = normalized_data.get("EXPERIENCES") or []
+        current_skill = exps[0]["DESIGNATION"].strip() if exps else ""
+
+        parts = [p for p in [full_name, current_skill] if p]
+        base = "_".join(parts) if parts else "Resume"
+
+        # Replace characters not allowed in filenames with _
+        base = re.sub(r'[<>:"/\\|?*\s]+', '_', base)
+        base = re.sub(r'_+', '_', base).strip('_')
+
+        return f"{base}.docx"
+
     def generate_resume(
         self,
         template_path: str,
         normalized_data: dict,
-        employee_id: str,
         output_dir: str = "output",
     ) -> dict:
         """
         Build a .docx resume from the template and normalized_data dict.
+        Always writes to the same filename so repeated updates overwrite the
+        previous file instead of accumulating timestamped copies.
+        Filename format: {FullName}_{PrimarySkill}_SailsResume.docx
         """
         try:
             if not os.path.exists(template_path):
@@ -368,14 +472,10 @@ class DocxTool:
                 "{{ACTIVITY}}",
             )
 
-            # 6. Save
+            # 6. Save — always same filename, overwrites previous version
             os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.abspath(
-                os.path.join(
-                    output_dir,
-                    f"{employee_id}_resume_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.docx",
-                )
-            )
+            filename = self._build_output_filename(normalized_data)
+            output_path = os.path.abspath(os.path.join(output_dir, filename))
             doc.save(output_path)
 
             return {"status": "success", "data": output_path}

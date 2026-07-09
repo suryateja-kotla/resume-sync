@@ -14,70 +14,131 @@ export default function UploadView({ uploading, uploadFile, uploadMsg, hasEmploy
   const fileRef = useRef<HTMLInputElement>(null)
 
   return (
-    <div className="flex-1 flex items-center justify-center p-6">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 max-w-md w-full">
-        <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
-          <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-        </div>
-        <h2 className="text-xl font-bold text-gray-800 text-center mb-1">Upload Your Resume</h2>
-        <p className="text-sm text-gray-400 text-center mb-7">
-          We'll extract your information automatically using AI — PDF or DOCX, max 10 MB.
-        </p>
+    <div style={{
+      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#f8f7ff', padding: '32px 20px',
+    }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
 
-        <div
-          onClick={() => fileRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition ${
-            uploadFile ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-          }`}
-        >
-          <input ref={fileRef} type="file" accept=".pdf,.docx" onChange={onFileChange} className="hidden" />
-          {uploadFile ? (
-            <>
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <p className="font-semibold text-gray-700 text-sm">{uploadFile.name}</p>
-              <p className="text-gray-400 text-xs mt-1">{(uploadFile.size / 1024).toFixed(0)} KB · Click to change</p>
-            </>
-          ) : (
-            <>
-              <svg className="w-8 h-8 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <p className="text-sm font-medium text-gray-500">Click to upload or drag &amp; drop</p>
-            </>
-          )}
-        </div>
-
-        {!hasEmployeeId && (
-          <div className="mt-4 bg-amber-50 border border-amber-100 text-amber-700 text-xs px-4 py-3 rounded-xl">
-            Your account doesn't have an Employee ID. Please contact HR.
+        {/* Logo — centered, gradient bg */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 56, height: 56, borderRadius: 16,
+            background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+            padding: 10, marginBottom: 14,
+            boxShadow: '0 4px 20px rgba(109,40,217,0.28)',
+          }}>
+            <img src="/syncfolio-mark.svg" alt="" style={{ width: '100%', height: '100%' }} />
           </div>
-        )}
-        {uploadMsg && (
-          <div className={`mt-4 text-xs px-4 py-3 rounded-xl border ${
-            uploadMsg.includes('success')
-              ? 'bg-green-50 text-green-700 border-green-100'
-              : 'bg-red-50 text-red-700 border-red-100'
-          }`}>{uploadMsg}</div>
-        )}
-        <button
-          onClick={onUpload}
-          disabled={!uploadFile || uploading || !hasEmployeeId}
-          className="w-full mt-5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2 text-sm"
-        >
-          {uploading ? <><IconSpinner />Processing resume...</> : 'Upload & Process Resume'}
-        </button>
-        <p className="text-gray-400 text-xs text-center mt-3">
-          Processing may take 30–60 seconds.
-        </p>
+          <div style={{ fontWeight: 700, fontSize: 17, color: '#1e1b4b' }}>SyncFolio</div>
+        </div>
+
+        {/* Heading */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <h2 style={{ fontSize: 28, fontWeight: 800, color: '#1e1b4b', margin: 0, letterSpacing: '-0.3px' }}>
+            Upload Your Resume
+          </h2>
+          <p style={{ marginTop: 8, fontSize: 14, color: '#64748b' }}>
+            We'll extract your information automatically using AI — PDF or DOCX, max 10 MB.
+          </p>
+        </div>
+
+        {/* Card */}
+        <div style={{
+          background: '#fff', borderRadius: 24,
+          border: '1px solid #ede9fe',
+          boxShadow: '0 8px 40px rgba(109,40,217,0.08)',
+          padding: '28px 28px',
+        }}>
+
+          {/* Drop zone */}
+          <div
+            onClick={() => fileRef.current?.click()}
+            style={{
+              border: `2px dashed ${uploadFile ? '#7c3aed' : '#d4d0fb'}`,
+              borderRadius: 16,
+              background: uploadFile ? '#f5f3ff' : '#faf9ff',
+              padding: '32px 20px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s, background 0.15s',
+            }}
+          >
+            <input ref={fileRef} type="file" accept=".pdf,.docx" onChange={onFileChange} style={{ display: 'none' }} />
+            {uploadFile ? (
+              <>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 44, height: 44, borderRadius: 12, background: '#ede9fe', marginBottom: 10,
+                }}>
+                  <svg width={22} height={22} fill="none" stroke="#7c3aed" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p style={{ fontWeight: 600, fontSize: 14, color: '#1e1b4b', margin: '0 0 4px' }}>{uploadFile.name}</p>
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>{(uploadFile.size / 1024).toFixed(0)} KB · Click to change</p>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 44, height: 44, borderRadius: 12, background: '#ede9fe', marginBottom: 10,
+                }}>
+                  <svg width={22} height={22} fill="none" stroke="#7c3aed" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <p style={{ fontWeight: 600, fontSize: 14, color: '#374151', margin: '0 0 4px' }}>Click to upload or drag &amp; drop</p>
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>PDF or DOCX</p>
+              </>
+            )}
+          </div>
+
+          {!hasEmployeeId && (
+            <div style={{
+              marginTop: 16, background: '#fffbeb', border: '1px solid #fde68a',
+              borderRadius: 12, padding: '10px 14px', fontSize: 13, color: '#92400e',
+            }}>
+              Your account doesn't have an Employee ID. Please contact HR.
+            </div>
+          )}
+
+          {uploadMsg && (
+            <div style={{
+              marginTop: 16, borderRadius: 12, padding: '10px 14px', fontSize: 13,
+              ...(uploadMsg.toLowerCase().includes('success')
+                ? { background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d' }
+                : { background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }),
+            }}>
+              {uploadMsg}
+            </div>
+          )}
+
+          <button
+            onClick={onUpload}
+            disabled={!uploadFile || uploading || !hasEmployeeId}
+            style={{
+              width: '100%', marginTop: 20, padding: '14px', borderRadius: 14, border: 'none',
+              cursor: (!uploadFile || uploading || !hasEmployeeId) ? 'not-allowed' : 'pointer',
+              background: (!uploadFile || uploading || !hasEmployeeId)
+                ? '#e5e7eb'
+                : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+              color: (!uploadFile || uploading || !hasEmployeeId) ? '#9ca3af' : '#fff',
+              fontWeight: 700, fontSize: 15,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              transition: 'background 0.15s',
+            }}
+          >
+            {uploading ? <><IconSpinner /> Processing resume…</> : 'Upload & Process Resume'}
+          </button>
+
+          <p style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 12, marginBottom: 0 }}>
+            Processing may take 30–60 seconds.
+          </p>
+        </div>
       </div>
     </div>
   )

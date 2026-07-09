@@ -446,6 +446,7 @@ async def get_employees_by_skill(
                 "current_skill_exp": 1,
                 "primary_skill": 1,
                 "secondary_skill": 1,
+                "skill_history": 1,
             },
         )
         results = []

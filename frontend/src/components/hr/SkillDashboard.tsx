@@ -5,7 +5,8 @@ import { SkillRack, SkillEmployee, getSkillBadgeClass } from '../../types/hr'
 import { getSkillMeta } from './skillMeta'
 
 const EXP_FILTER_OPTIONS = [
-  { value: '', label: 'All Experience' },
+  { value: '',  label: 'All Experience' },
+  { value: '0', label: '0+ yrs' },
   { value: '1', label: '1+ yrs' },
   { value: '2', label: '2+ yrs' },
   { value: '3', label: '3+ yrs' },
@@ -17,6 +18,11 @@ interface Props {
   actorEmail?: string
 }
 
+function fmt(date?: string) {
+  if (!date) return '—'
+  return new Date(date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+}
+
 export default function SkillDashboard({ actorEmail }: Props) {
   const [skillRacks, setSkillRacks] = useState<SkillRack[]>([])
   const [loading, setLoading] = useState(false)
@@ -25,10 +31,9 @@ export default function SkillDashboard({ actorEmail }: Props) {
   const [skillEmployeesLoading, setSkillEmployeesLoading] = useState(false)
   const [excelGenerating, setExcelGenerating] = useState(false)
   const [expFilter, setExpFilter] = useState<string>('')
+  const [historyModal, setHistoryModal] = useState<SkillEmployee | null>(null)
 
-  useEffect(() => {
-    fetchSkillRacks()
-  }, [])
+  useEffect(() => { fetchSkillRacks() }, [])
 
   const fetchSkillRacks = async () => {
     setLoading(true)
@@ -42,6 +47,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
   const openSkillRack = async (skill: string) => {
     setSelectedSkill(skill)
     setExpFilter('')
+    setHistoryModal(null)
     await fetchSkillEmployees(skill, '')
   }
 
@@ -49,7 +55,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
     setSkillEmployeesLoading(true)
     try {
       const params: Record<string, string> = { skill }
-      if (minExp) params.min_skill_exp = minExp
+      if (minExp !== '') params.min_skill_exp = minExp
       const { data } = await api.get('/hr/skill-employees', { params })
       if (data.status === 'success') setSkillEmployees(data.data)
     } catch { /* ignore */ }
@@ -58,13 +64,15 @@ export default function SkillDashboard({ actorEmail }: Props) {
 
   const handleExpFilterChange = (minExp: string) => {
     setExpFilter(minExp)
+    setHistoryModal(null)
     if (selectedSkill) fetchSkillEmployees(selectedSkill, minExp)
   }
 
-  const closePanel = () => {
+  const goBack = () => {
     setSelectedSkill(null)
     setSkillEmployees([])
     setExpFilter('')
+    setHistoryModal(null)
   }
 
   const generateExcel = async () => {
@@ -72,7 +80,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
     setExcelGenerating(true)
     try {
       const params: Record<string, string> = { skill: selectedSkill }
-      if (expFilter) params.min_skill_exp = expFilter
+      if (expFilter !== '') params.min_skill_exp = expFilter
       if (actorEmail) params.actor_email = actorEmail
       const { data } = await api.get('/hr/skill-employees-excel', { params })
       if (data.status === 'success' && data.excel_filename) {
@@ -264,11 +272,57 @@ export default function SkillDashboard({ actorEmail }: Props) {
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
+              <button
+                onClick={() => setHistoryModal(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition flex-shrink-0 ml-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Current skill row */}
+            <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
+              <span className="text-gray-400 text-xs">Current:</span>
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${getSkillBadgeClass(historyModal.current_skill)}`}>
+                {historyModal.current_skill || '—'}
+              </span>
+              <span className="text-gray-300 text-xs ml-auto">→ previously</span>
+            </div>
+
+            {/* History list */}
+            <div className="px-5 py-4 max-h-72 overflow-y-auto space-y-3">
+              {[...historyModal.skill_history!].reverse().map((h, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  {/* Timeline dot + line */}
+                  <div className="flex flex-col items-center flex-shrink-0 mt-0.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-400" />
+                    {i < historyModal.skill_history!.length - 1 && (  // still correct after reverse
+                      <div className="w-px flex-1 bg-gray-200 mt-1" style={{ minHeight: '24px' }} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 pb-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${getSkillBadgeClass(h.skill)}`}>
+                        {h.skill}
+                      </span>
+                      <span className="text-xs text-gray-500 font-medium">{h.skill_exp} yrs</span>
+                    </div>
+                    {h.designation && (
+                      <p className="text-gray-500 text-[11px] truncate">{h.designation}</p>
+                    )}
+                    <p className="text-gray-400 text-[10px] tabular-nums mt-0.5">
+                      {fmt(h.from)} → {fmt(h.to)}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }

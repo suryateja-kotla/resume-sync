@@ -111,5 +111,9 @@ export const groupWorkExperience = (items: WorkExperienceItem[]): WorkExpGroup[]
   return order.map(k => map.get(k)!)
 }
 
+/** Count unique companies (ignores multiple roles at the same company) */
+export const countUniqueCompanies = (items: WorkExperienceItem[]): number =>
+  new Set(items.map(i => i.company.name.trim().toLowerCase())).size
+
 export const initials = (name?: string) =>
   (name || 'E').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()

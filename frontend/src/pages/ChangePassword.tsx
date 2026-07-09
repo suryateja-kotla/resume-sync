@@ -2,42 +2,56 @@ import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
+import AuthLayout from '../components/auth/AuthLayout'
 
-function PasswordInput({
+function PwInput({
   label, value, onChange, placeholder,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-}) {
+}: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [show, setShow] = useState(false)
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
-      <div className="relative">
+      <label style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+        {label}
+      </label>
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+          <svg width={18} height={18} fill="none" stroke="#7c3aed" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M12 15v2m6-6V9a6 6 0 10-12 0v2M5 11h14v9H5z" />
+          </svg>
+        </span>
         <input
           type={show ? 'text' : 'password'}
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
           required
-          className="w-full px-4 py-3 pr-11 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 placeholder-gray-400 transition"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            padding: '13px 44px 13px 44px',
+            borderRadius: 14, border: '1.5px solid #e5e7eb',
+            fontSize: 14.5, color: '#1f2937', background: '#f9f8ff',
+            outline: 'none', transition: 'border-color 0.15s',
+          }}
+          onFocus={e => { e.target.style.borderColor = '#7c3aed'; e.target.style.background = '#fff' }}
+          onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.background = '#f9f8ff' }}
         />
         <button
           type="button"
-          onClick={() => setShow(v => !v)}
           tabIndex={-1}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
-          aria-label={show ? 'Hide' : 'Show'}
+          onClick={() => setShow(v => !v)}
+          style={{
+            position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+            background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#94a3b8',
+          }}
         >
           {show ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width={18} height={18} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88L3 3m18 18L3 3" />
             </svg>
           ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width={18} height={18} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -63,27 +77,16 @@ export default function ChangePassword() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (newPassword !== confirmPassword) {
-      setError('New passwords do not match.')
-      return
-    }
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.')
-      return
-    }
-
+    if (newPassword !== confirmPassword) { setError('New passwords do not match.'); return }
+    if (newPassword.length < 8) { setError('Password must be at least 8 characters.'); return }
     setLoading(true)
     try {
       await api.post('/auth/change-password', {
         current_password: currentPassword,
         new_password:     newPassword,
       })
-
       setSuccess(true)
       clearMustChangePassword()
-
-      // Small delay so the user sees the success message, then redirect
       setTimeout(() => {
         navigate(user?.role === 'HR' ? '/hr-dashboard' : '/employee-dashboard')
       }, 1500)
@@ -95,106 +98,116 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/90 mb-4 p-2.5 shadow-lg">
-            <img src="/syncfolio-mark.svg" alt="" className="h-full w-full" />
-          </div>
-          <h1 className="text-3xl font-bold text-white">SyncFolio</h1>
-        </div>
-
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          {user?.mustChangePassword && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-xl mb-5">
-              <strong>Action required:</strong> You must set a new password before continuing.
-              Your default password was <span className="font-mono">Sails@{user.employeeId}</span>.
-            </div>
-          )}
-
-          <h2 className="text-xl font-semibold text-gray-800 mb-1">
-            {user?.mustChangePassword ? 'Set your new password' : 'Change password'}
+    <AuthLayout>
+      {/* Heading */}
+      {!success && (
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <h2 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 800, color: '#1e1b4b', margin: 0, letterSpacing: '-0.3px' }}>
+            {user?.mustChangePassword ? 'Set Your Password' : 'Change Password'}
           </h2>
-          <p className="text-gray-500 text-sm mb-6">
-            Choose a strong password with at least 8 characters, one uppercase letter, and one digit.
+          <p style={{ marginTop: 8, fontSize: 14.5, color: '#64748b', margin: '8px 0 0' }}>
+            Choose a strong password — at least 8 characters, one uppercase, one digit.
           </p>
+        </div>
+      )}
 
-          {success ? (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-4 rounded-xl text-sm text-center">
-              <svg className="w-8 h-8 mx-auto mb-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* Card */}
+      <div style={{
+        background: '#fff', borderRadius: 24,
+        border: '1px solid #ede9fe',
+        boxShadow: '0 8px 40px rgba(109,40,217,0.08)',
+        padding: '32px 28px',
+      }}>
+        {user?.mustChangePassword && !success && (
+          <div style={{
+            background: '#fffbeb', border: '1px solid #fde68a',
+            borderRadius: 12, padding: '10px 14px', marginBottom: 18,
+            fontSize: 13.5, color: '#92400e', lineHeight: 1.5,
+          }}>
+            <strong>Action required:</strong> Please set a new password before continuing.
+          </div>
+        )}
+
+        {success ? (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 56, height: 56, borderRadius: '50%', background: '#f0fdf4', marginBottom: 16,
+            }}>
+              <svg width={28} height={28} fill="none" stroke="#16a34a" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Password changed successfully! Redirecting...
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <PasswordInput
-                label="Current password"
-                value={currentPassword}
-                onChange={setCurrentPassword}
-                placeholder="Your current password"
-              />
-              <PasswordInput
-                label="New password"
-                value={newPassword}
-                onChange={setNewPassword}
-                placeholder="At least 8 chars, 1 uppercase, 1 digit"
-              />
-              <PasswordInput
-                label="Confirm new password"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                placeholder="Re-enter new password"
-              />
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1e1b4b', margin: '0 0 8px' }}>Password changed!</h3>
+            <p style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, margin: 0 }}>
+              Redirecting you to the dashboard…
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <PwInput label="Current password" value={currentPassword} onChange={setCurrentPassword} placeholder="Your current password" />
+            <PwInput label="New password" value={newPassword} onChange={setNewPassword} placeholder="At least 8 chars, 1 uppercase, 1 digit" />
+            <PwInput label="Confirm new password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Re-enter new password" />
 
-              {error && (
-                <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">
-                  {error}
-                </div>
-              )}
+            {error && (
+              <div style={{
+                background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 12, padding: '10px 14px', fontSize: 13.5, color: '#dc2626',
+              }}>
+                {error}
+              </div>
+            )}
 
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%', padding: '14px', borderRadius: 14, border: 'none',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                background: loading ? '#a78bfa' : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                color: '#fff', fontWeight: 700, fontSize: 15,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {loading ? (
+                <>
+                  <svg width={18} height={18} className="animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.25 }} />
+                    <path fill="currentColor" style={{ opacity: 0.75 }} d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
+                  </svg>
+                  Saving…
+                </>
+              ) : 'Change Password'}
+            </button>
+
+            {!user?.mustChangePassword && (
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => navigate(-1)}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: 12, border: 'none',
+                  background: 'none', cursor: 'pointer', fontSize: 13.5, color: '#94a3b8', fontWeight: 500,
+                }}
               >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Saving...
-                  </>
-                ) : 'Change Password'}
+                Cancel
               </button>
+            )}
 
-              {!user?.mustChangePassword && (
-                <button
-                  type="button"
-                  onClick={() => navigate(-1)}
-                  className="w-full text-sm text-gray-500 hover:text-gray-700 py-2 transition"
-                >
-                  Cancel
-                </button>
-              )}
-
-              {user?.mustChangePassword && (
-                <button
-                  type="button"
-                  onClick={() => { logout(); navigate('/login') }}
-                  className="w-full text-sm text-gray-400 hover:text-gray-600 py-2 transition"
-                >
-                  Sign out instead
-                </button>
-              )}
-            </form>
-          )}
-        </div>
+            {user?.mustChangePassword && (
+              <button
+                type="button"
+                onClick={() => { logout(); navigate('/login') }}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: 12, border: 'none',
+                  background: 'none', cursor: 'pointer', fontSize: 13.5, color: '#94a3b8', fontWeight: 500,
+                }}
+              >
+                Sign out instead
+              </button>
+            )}
+          </form>
+        )}
       </div>
-    </div>
+    </AuthLayout>
   )
 }

@@ -3,6 +3,15 @@ import { Sparkles, Users, BriefcaseBusiness, ArrowRight } from 'lucide-react'
 import api from '../../api/axios'
 import { SkillEmployee, getSkillBadgeClass } from '../../types/hr'
 
+const EXP_FILTERS = [
+  { value: 0,  label: 'All' },
+  { value: 1,  label: '1+ yrs' },
+  { value: 2,  label: '2+ yrs' },
+  { value: 3,  label: '3+ yrs' },
+  { value: 5,  label: '5+ yrs' },
+  { value: 8,  label: '8+ yrs' },
+]
+
 interface Props {
   onCountChange: (count: number) => void
 }
@@ -10,10 +19,11 @@ interface Props {
 export default function TalentPool({ onCountChange }: Props) {
   const [benchEmployees, setBenchEmployees] = useState<SkillEmployee[]>([])
   const [loading, setLoading] = useState(false)
+  const [skillFilter, setSkillFilter] = useState<string>('')
+  const [expFilter, setExpFilter] = useState<number>(0)
+  const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    fetchBenchEmployees()
-  }, [])
+  useEffect(() => { fetchBenchEmployees() }, [])
 
   const fetchBenchEmployees = async () => {
     setLoading(true)
