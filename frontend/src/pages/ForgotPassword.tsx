@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api/axios'
+import AuthLayout from '../components/auth/AuthLayout'
 
 export default function ForgotPassword() {
   const [email,   setEmail]   = useState('')
@@ -19,7 +20,6 @@ export default function ForgotPassword() {
       if (err.response?.status === 429) {
         setError('Too many requests. Please wait an hour before trying again.')
       } else {
-        // Still show sent state — don't leak whether the email exists
         setSent(true)
       }
     } finally {
@@ -28,95 +28,128 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/90 mb-4 p-2.5 shadow-lg">
-            <img src="/syncfolio-mark.svg" alt="" className="h-full w-full" />
-          </div>
-          <h1 className="text-3xl font-bold text-white">SyncFolio</h1>
+    <AuthLayout>
+      {/* Heading */}
+      {!sent && (
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <h2 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 800, color: '#1e1b4b', margin: 0, letterSpacing: '-0.3px' }}>
+            Forgot Password?
+          </h2>
+          <p style={{ marginTop: 8, fontSize: 14.5, color: '#64748b', margin: '8px 0 0' }}>
+            Enter your work email and we'll send you a reset link.
+          </p>
         </div>
+      )}
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          {sent ? (
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-100 mb-4">
-                <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">Check your inbox</h2>
-              <p className="text-gray-500 text-sm mb-6">
-                If <strong>{email}</strong> is registered, a password reset link has been sent.
-                The link expires in 30 minutes.
-              </p>
-              <p className="text-xs text-gray-400 mb-4">
-                Didn't receive it? Check your spam folder or try again.
-              </p>
-              <button
-                onClick={() => { setSent(false); setEmail('') }}
-                className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-              >
-                Try a different email
-              </button>
+      {/* Card */}
+      <div style={{
+        background: '#fff', borderRadius: 24,
+        border: '1px solid #ede9fe',
+        boxShadow: '0 8px 40px rgba(109,40,217,0.08)',
+        padding: '32px 28px',
+      }}>
+        {sent ? (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 56, height: 56, borderRadius: '50%',
+              background: '#f0fdf4', marginBottom: 16,
+            }}>
+              <svg width={28} height={28} fill="none" stroke="#16a34a" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
             </div>
-          ) : (
-            <>
-              <h2 className="text-xl font-semibold text-gray-800 mb-1">Forgot your password?</h2>
-              <p className="text-gray-500 text-sm mb-6">
-                Enter your work email and we'll send you a reset link.
-              </p>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Email address
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="you@sailssoftware.com"
-                    required
-                    autoFocus
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 placeholder-gray-400 transition"
-                  />
-                </div>
-
-                {error && (
-                  <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Sending...
-                    </>
-                  ) : 'Send Reset Link'}
-                </button>
-              </form>
-            </>
-          )}
-
-          <div className="text-center mt-6">
-            <Link to="/login" className="text-sm text-gray-500 hover:text-gray-700 hover:underline">
-              ← Back to sign in
-            </Link>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1e1b4b', margin: '0 0 8px' }}>Check your inbox</h3>
+            <p style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, margin: '0 0 6px' }}>
+              If <strong>{email}</strong> is registered, a reset link has been sent.
+              The link expires in 30 minutes.
+            </p>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 20px' }}>
+              Didn't receive it? Check your spam folder or try again.
+            </p>
+            <button
+              onClick={() => { setSent(false); setEmail('') }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 13.5, fontWeight: 600, color: '#7c3aed',
+              }}
+            >
+              Try a different email
+            </button>
           </div>
-        </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                Email Address
+              </label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                  <svg width={18} height={18} fill="none" stroke="#7c3aed" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@sailssoftware.com"
+                  required
+                  autoFocus
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    padding: '13px 16px 13px 44px',
+                    borderRadius: 14, border: '1.5px solid #e5e7eb',
+                    fontSize: 14.5, color: '#1f2937', background: '#f9f8ff',
+                    outline: 'none', transition: 'border-color 0.15s',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = '#7c3aed'; e.target.style.background = '#fff' }}
+                  onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.background = '#f9f8ff' }}
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div style={{
+                background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 12, padding: '10px 14px', fontSize: 13.5, color: '#dc2626',
+              }}>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%', padding: '14px', borderRadius: 14, border: 'none',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                background: loading ? '#a78bfa' : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                color: '#fff', fontWeight: 700, fontSize: 15,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {loading ? (
+                <>
+                  <svg width={18} height={18} className="animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" style={{ opacity: 0.25 }} />
+                    <path fill="currentColor" style={{ opacity: 0.75 }} d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
+                  </svg>
+                  Sending…
+                </>
+              ) : 'Send Reset Link'}
+            </button>
+          </form>
+        )}
       </div>
-    </div>
+
+      {/* Back link */}
+      <div style={{ textAlign: 'center', marginTop: 20 }}>
+        <Link to="/login" style={{ fontSize: 13.5, color: '#94a3b8', textDecoration: 'none', fontWeight: 500 }}>
+          ← Back to sign in
+        </Link>
+      </div>
+    </AuthLayout>
   )
 }

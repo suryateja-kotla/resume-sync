@@ -1,0 +1,15 @@
+<!doctype html>
+<html><body>
+<script>
+localStorage.setItem('rs_user', JSON.stringify({
+  email: 'test@sailssoftware.com',
+  role: 'EMPLOYEE',
+  employeeId: 'EMP001',
+  fullName: 'Test Employee',
+  mustChangePassword: false
+}));
+localStorage.setItem('rs_access', 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3ODM2MDE4MjV9.sig');
+localStorage.setItem('rs_refresh', 'dummy');
+location.href = 'http://localhost:4200/employee-dashboard';
+</script>
+</body></html>

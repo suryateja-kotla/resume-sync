@@ -73,7 +73,7 @@ export default function ProfileCard({
   const resume = profile?.resume;
 
   return (
-    <div className="w-[370px] xl:w-[390px] flex-shrink-0 flex flex-col gap-5 sticky top-[84px]">
+    <div className="w-full lg:w-[370px] xl:w-[390px] flex-shrink-0 flex flex-col gap-5 lg:sticky lg:top-[84px]">
       {/* Profile Card */}
       <SectionCard className="overflow-hidden p-0 hover:shadow-2xl transition-all duration-300">
         {/* Banner */}

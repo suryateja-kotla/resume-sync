@@ -494,7 +494,7 @@ export default function EmployeeDashboard() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 max-w-screen-xl mx-auto w-full px-6 py-6 flex flex-col gap-5">
+        <div className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-6 py-6 flex flex-col gap-5">
 
           {resume && (
             <WelcomeBanner
@@ -507,7 +507,7 @@ export default function EmployeeDashboard() {
             />
           )}
 
-          <div className="flex gap-5 items-start">
+          <div className="flex flex-col lg:flex-row gap-5 items-start">
 
           {/* Left column */}
           <ProfileCard
@@ -521,7 +521,7 @@ export default function EmployeeDashboard() {
           />
 
           {/* Right column */}
-          <div className="flex-1 min-w-0 flex flex-col gap-6">
+          <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
             {saveMsg && !activeModal && (
               <div className={`px-4 py-3 rounded-xl text-sm border ${
                 saveMsg.includes('success')
