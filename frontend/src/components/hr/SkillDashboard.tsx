@@ -169,7 +169,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
 
       {selectedSkill && (
         <div className="fixed inset-0 z-30 flex justify-end">
-          <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" onClick={closePanel} />
+          <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" onClick={goBack} />
           <div className="relative flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
             <div className="flex-shrink-0 border-b border-slate-200 px-6 py-5">
               <div className="mb-4 flex items-start justify-between">
@@ -184,7 +184,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
                     </p>
                   </div>
                 </div>
-                <button onClick={closePanel} className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+                <button onClick={goBack} className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -272,18 +272,32 @@ export default function SkillDashboard({ actorEmail }: Props) {
                     </div>
                   ))}
                 </div>
-              </div>
-              <button
-                onClick={() => setHistoryModal(null)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition flex-shrink-0 ml-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              )}
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Current skill row */}
+      {historyModal && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" onClick={() => setHistoryModal(null)} />
+                  <div className="relative flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                    <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 truncate">{historyModal.name}</p>
+                        <p className="text-xs text-slate-400">Skill History</p>
+                      </div>
+                      <button
+                        onClick={() => setHistoryModal(null)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition flex-shrink-0 ml-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Current skill row */}
             <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
               <span className="text-gray-400 text-xs">Current:</span>
               <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${getSkillBadgeClass(historyModal.current_skill)}`}>
@@ -323,6 +337,6 @@ export default function SkillDashboard({ actorEmail }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
