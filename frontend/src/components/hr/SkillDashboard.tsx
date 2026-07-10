@@ -94,14 +94,14 @@ export default function SkillDashboard({ actorEmail }: Props) {
     <>
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-7xl space-y-5">
-          <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+          <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
                   <Sparkles className="h-4 w-4" />
                   Skill intelligence
                 </div>
-                <h2 className="text-2xl font-semibold">Browse capabilities by skill rack</h2>
+                <h2 className="text-xl font-semibold sm:text-2xl">Browse capabilities by skill rack</h2>
                 <p className="mt-2 text-sm text-violet-100">Open any skill group to view matching employees and export the list instantly.</p>
               </div>
               <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm backdrop-blur">
@@ -124,7 +124,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
               <p className="text-sm text-slate-500">Skill racks populate once employees have filled in their skill profile.</p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {skillRacks.map(rack => {
                 const meta = getSkillMeta(rack.skill)
                 const hasEmployees = rack.employee_count > 0
@@ -133,7 +133,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
                     key={rack.skill}
                     onClick={() => hasEmployees && openSkillRack(rack.skill)}
                     disabled={!hasEmployees}
-                    className={`group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 text-left transition-all duration-300 ${
+                    className={`group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 text-left transition-all duration-300 ${
                       hasEmployees
                         ? 'cursor-pointer hover:-translate-y-1 hover:border-violet-300 hover:shadow-[0_22px_50px_-24px_rgba(79,70,229,0.5)]'
                         : 'cursor-default border-slate-200 bg-slate-50 opacity-60'
@@ -163,20 +163,20 @@ export default function SkillDashboard({ actorEmail }: Props) {
         <div className="fixed inset-0 z-30 flex justify-end">
           <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-md" onClick={goBack} />
           <div className="relative flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
-            <div className="flex-shrink-0 border-b border-slate-200 bg-gradient-to-r from-white via-violet-50/40 to-indigo-50/30 px-6 py-5">
-              <div className="mb-4 flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${getSkillMeta(selectedSkill).bg}`}>
+            <div className="flex-shrink-0 border-b border-slate-200 bg-gradient-to-r from-white via-violet-50/40 to-indigo-50/30 px-4 py-4 sm:px-6 sm:py-5">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                  <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border ${getSkillMeta(selectedSkill).bg}`}>
                     <div className={getSkillMeta(selectedSkill).text}>{getSkillMeta(selectedSkill).icon}</div>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-slate-800">{selectedSkill}</h2>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-xl font-semibold text-slate-800">{selectedSkill}</h2>
                     <p className="mt-0.5 text-sm text-slate-500">
                       {skillEmployeesLoading ? 'Loading…' : `${skillEmployees.length} employee${skillEmployees.length !== 1 ? 's' : ''}`}
                     </p>
                   </div>
                 </div>
-                <button onClick={goBack} className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+                <button onClick={goBack} className="flex-shrink-0 rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -212,7 +212,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
               {skillEmployeesLoading ? (
                 <div className="flex items-center justify-center py-24">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />

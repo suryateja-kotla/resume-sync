@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Mail, Send, ArrowRight, Sparkles, UserPlus, CheckCircle2, AlertCircle, Clock3 } from 'lucide-react'
+import { Mail, Send, Sparkles, UserPlus, CheckCircle2, AlertCircle, Clock3 } from 'lucide-react'
 import api from '../../api/axios'
 import { NewEmployee } from '../../types/hr'
 
@@ -88,14 +88,14 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
                 <Sparkles className="h-4 w-4" />
                 Welcome new joiners
               </div>
-              <h2 className="text-2xl font-semibold">Invite employees to start their resume journey</h2>
+              <h2 className="text-xl font-semibold sm:text-2xl">Invite employees to start their resume journey</h2>
               <p className="mt-2 max-w-2xl text-sm text-violet-100">
                 Send onboarding invitations by email and keep track of who is still pending their first resume upload.
               </p>
@@ -107,7 +107,7 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
           </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-6 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 sm:p-6">
           <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600" />
           <div className="mb-4 flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-violet-600" />
@@ -156,7 +156,7 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
           )}
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-6 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 sm:p-6">
           <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600" />
           <div className="mb-4 flex items-center gap-2">
             <Clock3 className="h-5 w-5 text-slate-600" />

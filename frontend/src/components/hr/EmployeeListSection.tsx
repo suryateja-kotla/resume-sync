@@ -109,14 +109,14 @@ export default function EmployeeListSection({ actorEmail }: Props) {
     <>
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-7xl space-y-5">
-          <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+          <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
                   <Sparkles className="h-4 w-4" />
                   Talent directory
                 </div>
-                <h2 className="text-2xl font-semibold">{filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} in view</h2>
+                <h2 className="text-xl font-semibold sm:text-2xl">{filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} in view</h2>
                 <p className="mt-2 text-sm text-violet-100">
                   {allEmployeesCount} profiles available with searchable skills and resumes.
                 </p>
@@ -148,35 +148,35 @@ export default function EmployeeListSection({ actorEmail }: Props) {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="min-w-0 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-violet-50 p-2.5 text-violet-600">
+                <div className="flex-shrink-0 rounded-2xl bg-violet-50 p-2.5 text-violet-600">
                   <Users className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-slate-500">Total employees</p>
                   <p className="text-xl font-semibold text-slate-800">{allEmployeesCount}</p>
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="min-w-0 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-50 p-2.5 text-emerald-600">
+                <div className="flex-shrink-0 rounded-2xl bg-emerald-50 p-2.5 text-emerald-600">
                   <BadgeCheck className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-slate-500">Resume ready</p>
                   <p className="text-xl font-semibold text-slate-800">{allEmployees.filter(emp => emp.resume_path).length}</p>
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="min-w-0 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-sky-50 p-2.5 text-sky-600">
+                <div className="flex-shrink-0 rounded-2xl bg-sky-50 p-2.5 text-sky-600">
                   <BriefcaseBusiness className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-slate-500">Visible now</p>
                   <p className="text-xl font-semibold text-slate-800">{filteredEmployees.length}</p>
                 </div>

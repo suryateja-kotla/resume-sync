@@ -14,24 +14,26 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
   ]
 
   return (
-    <div className="relative bg-white rounded-xl p-4 border border-violet-100 shadow-[0_0_16px_4px_rgba(139,92,246,0.12)] hover:shadow-[0_0_24px_6px_rgba(139,92,246,0.22)] transition-shadow duration-300">
+    <div className="relative min-w-0 bg-white rounded-xl p-4 border border-violet-100 shadow-[0_0_16px_4px_rgba(139,92,246,0.12)] hover:shadow-[0_0_24px_6px_rgba(139,92,246,0.22)] transition-shadow duration-300">
       <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-50/60 via-white to-indigo-50/40 pointer-events-none" />
-      <div className="relative flex items-start justify-between mb-3">
+      <div className="relative flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-slate-800 truncate">{candidate.name || candidate.employee_id}</h3>
-          <a href={`mailto:${candidate.email}`} className="text-violet-600 text-sm hover:underline">
+          <a href={`mailto:${candidate.email}`} className="text-violet-600 text-sm hover:underline break-all">
             {candidate.email}
           </a>
           <p className="text-slate-400 text-xs mt-0.5">ID: {candidate.employee_id}</p>
         </div>
-        <span className="bg-violet-100 text-violet-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(139,92,246,0.3)]">
-          {candidate.currentRole}
-        </span>
-        {candidate.isOnBench && (
-          <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shadow-[0_0_8px_2px_rgba(16,185,129,0.3)]">
-            On Bench
+        <div className="flex flex-wrap items-center justify-end gap-1.5 flex-shrink-0">
+          <span className="bg-violet-100 text-violet-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap shadow-[0_0_8px_2px_rgba(139,92,246,0.3)]">
+            {candidate.currentRole}
           </span>
-        )}
+          {candidate.isOnBench && (
+            <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap shadow-[0_0_8px_2px_rgba(16,185,129,0.3)]">
+              On Bench
+            </span>
+          )}
+        </div>
       </div>
       <div className="relative flex flex-wrap gap-1.5">
         {palettes && null}
@@ -114,13 +116,13 @@ export default function CandidateSearch() {
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 sm:px-6">
+        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
             <Sparkles className="h-4 w-4" />
             AI-powered search
           </div>
-          <h2 className="text-2xl font-semibold">Candidate Search</h2>
+          <h2 className="text-xl font-semibold sm:text-2xl">Candidate Search</h2>
           <p className="mt-2 text-sm text-violet-100">Find talent using natural language queries.</p>
         </div>
         {messages.map(msg => (
@@ -152,7 +154,7 @@ export default function CandidateSearch() {
                       )}
                       {msg.candidates && msg.candidates.length > 0 && (
                         <div className="space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-3">
                             {msg.candidates.map((c, i) => <CandidateCard key={i} candidate={c} />)}
                           </div>
                           {msg.excel_filename && (
@@ -176,7 +178,7 @@ export default function CandidateSearch() {
               </div>
             )}
             {msg.type === 'user' && (
-              <div className="max-w-lg">
+              <div className="max-w-[85%] sm:max-w-lg">
                 <div className="bg-gradient-to-r from-violet-700 via-indigo-700 to-fuchsia-700 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed shadow-sm">
                   {msg.text}
                 </div>
@@ -186,7 +188,7 @@ export default function CandidateSearch() {
         ))}
         <div ref={bottomRef} />
       </div>
-      <div className="bg-white border-t border-slate-100 px-6 py-4 flex-shrink-0">
+      <div className="bg-white border-t border-slate-100 px-4 py-4 flex-shrink-0 sm:px-6">
         <div className="flex items-end gap-3 max-w-4xl mx-auto">
           <div className="flex-1 relative">
             <textarea

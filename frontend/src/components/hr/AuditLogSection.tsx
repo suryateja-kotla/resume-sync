@@ -53,16 +53,16 @@ export default function AuditLogSection() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6">
+    <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
       <div className="max-w-5xl mx-auto space-y-4">
-        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
                 <ShieldCheck className="h-4 w-4" />
                 Compliance trail
               </div>
-              <h2 className="text-2xl font-semibold">Audit Log</h2>
+              <h2 className="text-xl font-semibold sm:text-2xl">Audit Log</h2>
               <p className="mt-2 text-sm text-violet-100">Track who changed what, and when, across the system.</p>
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm backdrop-blur">
@@ -131,15 +131,15 @@ export default function AuditLogSection() {
                 <div key={ev._id}>
                   <button
                     onClick={() => setExpandedId(expandedId === ev._id ? null : ev._id)}
-                    className="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-violet-50/40 transition"
+                    className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 text-left transition hover:bg-violet-50/40 sm:flex-nowrap sm:gap-4 sm:px-5 sm:py-3.5"
                   >
-                    <span className="text-slate-400 text-xs whitespace-nowrap w-40 flex-shrink-0">
+                    <span className="text-slate-400 text-xs whitespace-nowrap flex-shrink-0 sm:w-40">
                       {new Date(ev.timestamp).toLocaleString()}
                     </span>
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${AUDIT_EVENT_COLORS[ev.event_type] || 'bg-slate-100 text-slate-700'}`}>
                       {AUDIT_EVENT_LABELS[ev.event_type] || ev.event_type}
                     </span>
-                    <span className="text-slate-700 text-sm truncate flex-shrink-0 w-32">{ev.actor}</span>
+                    <span className="text-slate-700 text-sm truncate flex-shrink-0 sm:w-32">{ev.actor}</span>
                     {ev.employee_id && ev.employee_id !== ev.actor && (
                       <span className="text-slate-400 text-xs truncate">→ {ev.employee_id}</span>
                     )}

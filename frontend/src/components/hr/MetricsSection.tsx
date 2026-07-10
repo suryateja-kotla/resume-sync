@@ -22,7 +22,7 @@ export default function MetricsSection() {
 
   if (loading || !metrics) {
     return (
-      <div className="flex-1 overflow-y-auto px-6 py-6 flex items-center justify-center">
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-slate-400 text-sm">Loading metrics...</p>
@@ -39,17 +39,17 @@ export default function MetricsSection() {
   )
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6">
+    <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
       <div className="max-w-5xl mx-auto space-y-6">
 
-        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
                 <ShieldCheck className="h-4 w-4" />
                 Live insights
               </div>
-              <h2 className="text-2xl font-semibold">Monitoring</h2>
+              <h2 className="text-xl font-semibold sm:text-2xl">Monitoring</h2>
               <p className="mt-2 text-sm text-violet-100">Live resume coverage, skill distribution and recent activity.</p>
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm backdrop-blur">
@@ -60,7 +60,7 @@ export default function MetricsSection() {
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid min-w-0 grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             {
               label: 'Total Employees', value: metrics.overview.total_employees, sub: 'in system',
@@ -85,7 +85,7 @@ export default function MetricsSection() {
               icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
             },
           ].map(card => (
-            <div key={card.label} className={`${card.bg} border ${card.border} rounded-2xl p-5`}>
+            <div key={card.label} className={`${card.bg} border ${card.border} min-w-0 rounded-2xl p-5`}>
               <div className={`w-9 h-9 rounded-xl ${card.bg} border ${card.border} flex items-center justify-center mb-3`}>
                 <svg className={`w-5 h-5 ${card.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={card.icon} />
@@ -100,7 +100,7 @@ export default function MetricsSection() {
 
         {/* Coverage ring + activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="relative overflow-hidden bg-white border border-slate-200/70 rounded-2xl shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 p-6 flex items-center gap-6">
+          <div className="relative overflow-hidden bg-white border border-slate-200/70 rounded-2xl shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 p-6 flex flex-col items-center gap-6 sm:flex-row">
             <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600" />
             <div className="relative w-28 h-28 flex-shrink-0">
               <svg viewBox="0 0 36 36" className="w-28 h-28 -rotate-90">
@@ -181,7 +181,7 @@ export default function MetricsSection() {
                 const maxCount = Math.max(...metrics.skill_distribution.map(s => s.count), 1)
                 return metrics.skill_distribution.map(s => (
                   <div key={s.skill} className="flex items-center gap-3">
-                    <span className="text-xs text-slate-600 font-medium w-32 truncate flex-shrink-0">{s.skill}</span>
+                    <span className="text-xs text-slate-600 font-medium w-20 truncate flex-shrink-0 sm:w-32">{s.skill}</span>
                     <div className="flex-1 h-7 bg-slate-50 rounded-lg overflow-hidden relative">
                       <div
                         className="h-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-lg transition-all duration-700 flex items-center"
@@ -217,11 +217,13 @@ export default function MetricsSection() {
                   ? new Date(ev.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                   : ''
                 return (
-                  <div key={i} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
+                  <div key={i} className="flex items-center gap-2 py-2 border-b border-slate-50 last:border-0">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
-                    <span className="text-slate-700 text-sm font-medium truncate">{ev.employee_id || ev.actor}</span>
-                    <span className="text-slate-400 text-sm">{meta.label}</span>
-                    <span className="ml-auto text-slate-400 text-xs whitespace-nowrap flex-shrink-0">{time}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      <span className="font-medium text-slate-700">{ev.employee_id || ev.actor}</span>
+                      <span className="text-slate-400"> {meta.label}</span>
+                    </span>
+                    <span className="text-slate-400 text-xs whitespace-nowrap flex-shrink-0">{time}</span>
                   </div>
                 )
               })}
