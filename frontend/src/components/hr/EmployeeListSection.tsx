@@ -1,21 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, ArrowRight, Sparkles } from 'lucide-react'
+import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, Download, Sparkles } from 'lucide-react'
 import api from '../../api/axios'
 import { SkillSummaryRow, getSkillBadgeClass } from '../../types/hr'
 
 interface Props {
   actorEmail?: string
-  onExcelGenerating: (v: boolean) => void
-  excelGenerating: boolean
 }
 
-export default function EmployeeListSection({ actorEmail, onExcelGenerating, excelGenerating }: Props) {
+export default function EmployeeListSection({ actorEmail }: Props) {
   const [allEmployees, setAllEmployees] = useState<SkillSummaryRow[]>([])
   const [loading, setLoading] = useState(false)
   const [allEmployeesCount, setAllEmployeesCount] = useState(0)
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<SkillSummaryRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [excelGenerating, setExcelGenerating] = useState(false)
 
   useEffect(() => {
     fetchAllEmployees()
@@ -35,7 +34,7 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
 
   const generateExcel = async () => {
     if (excelGenerating) return
-    onExcelGenerating(true)
+    setExcelGenerating(true)
     try {
       const { data } = await api.get('/hr/all-employees-excel', {
         params: actorEmail ? { actor_email: actorEmail } : {},
@@ -44,7 +43,7 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
         window.open(`http://localhost:8000/api/download-excel?filename=${encodeURIComponent(data.excel_filename)}`, '_blank')
       }
     } catch { /* ignore */ }
-    finally { onExcelGenerating(false) }
+    finally { setExcelGenerating(false) }
   }
 
   const confirmDelete = async () => {
@@ -77,12 +76,10 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
     })
     .sort((a, b) => (a.employee_id || '').localeCompare(b.employee_id || '', 'en', { numeric: true }))
 
-  ;(EmployeeListSection as any)._generateExcel = generateExcel
-
   if (loading) {
     return (
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        <div className="flex min-h-[60vh] items-center justify-center rounded-[28px] border border-violet-100 bg-white/80 p-8 shadow-[0_20px_60px_-25px_rgba(109,40,217,0.25)] backdrop-blur">
+        <div className="flex min-h-[60vh] items-center justify-center rounded-2xl border border-violet-100 bg-white/80 p-8 shadow-[0_20px_60px_-25px_rgba(109,40,217,0.25)] backdrop-blur">
           <div className="flex flex-col items-center gap-3">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
             <p className="text-sm text-slate-500">Loading employee profiles…</p>
@@ -95,7 +92,7 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
   if (allEmployees.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        <div className="mx-auto flex max-w-2xl items-center justify-center rounded-[30px] border border-violet-100 bg-white/80 p-10 text-center shadow-[0_20px_60px_-25px_rgba(109,40,217,0.25)] backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-center justify-center rounded-2xl border border-violet-100 bg-white/80 p-10 text-center shadow-[0_20px_60px_-25px_rgba(109,40,217,0.25)] backdrop-blur">
           <div>
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
               <BriefcaseBusiness className="h-7 w-7" />
@@ -112,7 +109,7 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
     <>
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-7xl space-y-5">
-          <div className="rounded-[30px] border border-violet-100 bg-gradient-to-br from-violet-600 via-indigo-600 to-slate-900 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+          <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
@@ -124,21 +121,35 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
                   {allEmployeesCount} profiles available with searchable skills and resumes.
                 </p>
               </div>
-              <div className="relative w-full max-w-sm">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
-                <input
-                  type="text"
-                  value={employeeSearch}
-                  onChange={e => setEmployeeSearch(e.target.value)}
-                  placeholder="Search name, skill, email…"
-                  className="w-full rounded-2xl border border-white/20 bg-white/10 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-violet-100 outline-none ring-0 backdrop-blur transition focus:bg-white/15"
-                />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative w-full sm:w-64">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                  <input
+                    type="text"
+                    value={employeeSearch}
+                    onChange={e => setEmployeeSearch(e.target.value)}
+                    placeholder="Search name, skill, email…"
+                    className="w-full rounded-2xl border border-white/20 bg-white/10 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-violet-100 outline-none ring-0 backdrop-blur transition focus:bg-white/15"
+                  />
+                </div>
+                <button
+                  onClick={generateExcel}
+                  disabled={excelGenerating}
+                  className="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/15 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {excelGenerating ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {excelGenerating ? 'Generating…' : 'Export Excel'}
+                </button>
               </div>
             </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-[24px] border border-violet-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-violet-50 p-2.5 text-violet-600">
                   <Users className="h-5 w-5" />
@@ -149,7 +160,7 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
                 </div>
               </div>
             </div>
-            <div className="rounded-[24px] border border-emerald-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-emerald-50 p-2.5 text-emerald-600">
                   <BadgeCheck className="h-5 w-5" />
@@ -160,7 +171,7 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
                 </div>
               </div>
             </div>
-            <div className="rounded-[24px] border border-sky-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-sky-50 p-2.5 text-sky-600">
                   <BriefcaseBusiness className="h-5 w-5" />
@@ -173,7 +184,8 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.25)]">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200">
+            <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600 z-10" />
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">
                 <thead>
@@ -251,8 +263,8 @@ export default function EmployeeListSection({ actorEmail, onExcelGenerating, exc
       </div>
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-md">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
                 <Trash2 className="h-5 w-5" />

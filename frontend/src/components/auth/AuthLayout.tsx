@@ -2,16 +2,16 @@ import { ReactNode } from 'react'
 
 const highlights = [
   {
-    title: 'AI Resume Intelligence',
-    description: 'Extract candidate skills, experience and insights in seconds.',
+    title: 'AI Resume Parsing',
+    description: 'Upload a resume once — skills, experience and projects are extracted automatically.',
   },
   {
-    title: 'Smart Talent Search',
-    description: 'Quickly identify the best candidates using AI powered search.',
+    title: 'Natural-Language Search',
+    description: 'Ask "React developers with 2+ years" and get instant, ranked candidate matches.',
   },
   {
-    title: 'Centralized Hiring',
-    description: 'Manage resumes, interviews and employees from one platform.',
+    title: 'Skill Racks & Bench Tracking',
+    description: 'Browse talent by technology, see who’s available, and export reports in a click.',
   },
 ]
 
@@ -60,10 +60,10 @@ export function AuthBrandPanel() {
         </div>
 
         <h1 style={{ marginTop: 48, fontSize: 'clamp(28px, 3vw, 44px)', fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.5px' }}>
-          Modern Hiring.<br />Smarter Recruitment.
+          Every Resume.<br />Every Skill. One Platform.
         </h1>
         <p style={{ marginTop: 18, fontSize: 15, color: 'rgba(221,214,254,0.9)', lineHeight: 1.7, maxWidth: 380 }}>
-          Manage resumes, employees and recruitment workflows from one intelligent AI-powered platform.
+          AI-powered resume parsing, natural-language candidate search and live skill tracking — everything HR and employees need in one workspace.
         </p>
       </div>
 
@@ -115,11 +115,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
           {/* mobile logo (shown when left panel is hidden) */}
           <div className="login-mobile-logo" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, justifyContent: 'center' }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10, padding: 6,
-              background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+            <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <img src="/syncfolio-mark.svg" alt="" style={{ width: '100%', height: '100%' }} />
             </div>
             <span style={{ fontWeight: 700, fontSize: 17, color: '#1e1b4b' }}>SyncFolio</span>
