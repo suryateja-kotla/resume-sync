@@ -41,7 +41,7 @@ export default function CertsAndAchievements({
           onAction={onEditCerts}
         />
 
-        <div className="px-6 py-6">
+        <div className="px-5 py-5">
 
           {certifications?.length ? (
 
@@ -135,7 +135,7 @@ export default function CertsAndAchievements({
           onAction={onEditAchievements}
         />
 
-        <div className="px-6 py-6">
+        <div className="px-5 py-5">
 
           {achievements?.length ? (
 
