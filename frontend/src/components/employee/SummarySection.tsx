@@ -47,19 +47,19 @@ export default function SummarySection({
         onAction={onEdit}
       />
 
-      <div className="px-6 py-6">
+      <div className="px-5 py-5">
 
-        <p className="mb-5 text-sm text-slate-500">
+        <p className="mb-4 text-sm text-slate-500">
           A quick overview of your professional background.
         </p>
 
         {summary ? (
-          <div className="rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-violet-50/30 to-indigo-50/20 p-6">
+          <div className="rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-violet-50/30 to-indigo-50/20 p-5">
 
             <p
               className="
-                text-[16px]
-                leading-[1.9]
+                text-[15px]
+                leading-[1.75]
                 text-slate-700
                 whitespace-pre-line
                 max-w-4xl
@@ -70,7 +70,7 @@ export default function SummarySection({
 
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-violet-50 p-10 text-center">
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-violet-50 p-8 text-center">
 
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100">
 

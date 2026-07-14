@@ -8,7 +8,6 @@ interface Props {
 }
 
 export default function ExperienceSection({ workExperience, onEdit }: Props) {
-  const [outerOpen, setOuterOpen] = useState(false)
   const [openEntries, setOpenEntries] = useState<Set<number>>(new Set())
   const [openProjects, setOpenProjects] = useState<Set<string>>(new Set())
 
@@ -32,109 +31,103 @@ export default function ExperienceSection({ workExperience, onEdit }: Props) {
       />
 
       {groups.length > 0 ? (
-        <div className="divide-y divide-gray-50">
-          <button
-            onClick={() => setOuterOpen(v => !v)}
-            className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-gray-50 transition"
-          >
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+        <div className="divide-y divide-slate-50">
+          <div className="px-5 py-3">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
               {groups.length} position{groups.length !== 1 ? 's' : ''}
             </span>
-            <IconChevron open={outerOpen} />
-          </button>
+          </div>
 
-          {outerOpen && (
-            <div className="divide-y divide-gray-50">
-              {groups.map((group, i) => (
-                <div key={i}>
-                  <button
-                    onClick={() => toggleEntry(i)}
-                    className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-gray-50 transition"
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 text-sm font-bold text-blue-600">
-                      {(group.company.name || 'C')[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{group.designation}</p>
-                      <p className="text-xs text-gray-400 truncate">{group.company.name}</p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {group.duration && <span className="text-xs text-gray-400 whitespace-nowrap">{group.duration}</span>}
-                      <IconChevron open={openEntries.has(i)} />
-                    </div>
-                  </button>
+          <div className="divide-y divide-slate-50">
+            {groups.map((group, i) => (
+              <div key={i}>
+                <button
+                  onClick={() => toggleEntry(i)}
+                  className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-slate-50 transition"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0 text-sm font-bold text-violet-600">
+                    {(group.company.name || 'C')[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{group.designation}</p>
+                    <p className="text-xs text-slate-400 truncate">{group.company.name}</p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {group.duration && <span className="text-xs text-slate-400 whitespace-nowrap">{group.duration}</span>}
+                    <IconChevron open={openEntries.has(i)} />
+                  </div>
+                </button>
 
-                  {openEntries.has(i) && (
-                    <div className="px-5 pb-4 pt-1 bg-gray-50/60 space-y-2">
-                      {group.projects.length === 0 ? (
-                        <p className="text-xs text-gray-400 italic">No project details.</p>
-                      ) : group.projects.map((proj, j) => {
-                        const key = `${i}-${j}`
-                        const hasDetails = !!(
-                          proj?.project_description ||
-                          (proj?.environment && proj.environment.length > 0) ||
-                          (proj?.responsibilities && proj.responsibilities.length > 0)
-                        )
-                        return (
-                          <div key={j} className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-                            <button
-                              onClick={() => hasDetails && toggleProject(key)}
-                              className={`w-full flex items-center justify-between px-4 py-3 text-left transition ${hasDetails ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'}`}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-xs font-semibold text-gray-700">{proj?.name?.trim() || group.designation}</span>
-                                  {proj?.client?.trim() && <span className="text-xs text-gray-400">· {proj.client}</span>}
-                                  {proj?.role?.trim() && proj.role !== group.designation && (
-                                    <span className="text-xs text-gray-400">· {proj.role}</span>
-                                  )}
+                {openEntries.has(i) && (
+                  <div className="px-5 pb-4 pt-1 bg-slate-50/60 space-y-2">
+                    {group.projects.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No project details.</p>
+                    ) : group.projects.map((proj, j) => {
+                      const key = `${i}-${j}`
+                      const hasDetails = !!(
+                        proj?.project_description ||
+                        (proj?.environment && proj.environment.length > 0) ||
+                        (proj?.responsibilities && proj.responsibilities.length > 0)
+                      )
+                      return (
+                        <div key={j} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                          <button
+                            onClick={() => hasDetails && toggleProject(key)}
+                            className={`w-full flex items-center justify-between px-4 py-3 text-left transition ${hasDetails ? 'hover:bg-slate-50 cursor-pointer' : 'cursor-default'}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold text-slate-700">{proj?.name?.trim() || group.designation}</span>
+                                {proj?.client?.trim() && <span className="text-xs text-slate-400">· {proj.client}</span>}
+                                {proj?.role?.trim() && proj.role !== group.designation && (
+                                  <span className="text-xs text-slate-400">· {proj.role}</span>
+                                )}
+                              </div>
+                              {proj?.project_description && !openProjects.has(key) && (
+                                <p className="text-xs text-slate-400 mt-0.5 truncate">{proj.project_description}</p>
+                              )}
+                            </div>
+                            {hasDetails && <IconChevron open={openProjects.has(key)} />}
+                          </button>
+
+                          {openProjects.has(key) && proj && (
+                            <div className="px-4 pb-4 pt-3 border-t border-slate-100 space-y-4">
+                              {proj.project_description && (
+                                <p className="text-[15px] text-slate-600 leading-relaxed">{proj.project_description}</p>
+                              )}
+                              {proj.environment && proj.environment.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {proj.environment.map((sk, k) => (
+                                    <span key={k} className="flex items-center gap-1.5 bg-violet-50 text-violet-700 border border-violet-100 text-xs px-3 py-1.5 rounded-full font-medium">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
+                                      {sk}
+                                    </span>
+                                  ))}
                                 </div>
-                                {proj?.project_description && !openProjects.has(key) && (
-                                  <p className="text-xs text-gray-400 mt-0.5 truncate">{proj.project_description}</p>
-                                )}
-                              </div>
-                              {hasDetails && <IconChevron open={openProjects.has(key)} />}
-                            </button>
-
-                            {openProjects.has(key) && proj && (
-                              <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-4">
-                                {proj.project_description && (
-                                  <p className="text-[15px] text-gray-600 leading-relaxed">{proj.project_description}</p>
-                                )}
-                                {proj.environment && proj.environment.length > 0 && (
-                                  <div className="flex flex-wrap gap-2">
-                                    {proj.environment.map((sk, k) => (
-                                      <span key={k} className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-100 text-xs px-3 py-1.5 rounded-full font-medium">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-                                        {sk}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {proj.responsibilities && proj.responsibilities.length > 0 && (
-                                  <ul className="space-y-1">
-                                    {proj.responsibilities.map((r, k) => (
-                                      <li key={k} className="flex items-start gap-1.5 text-[15px] text-gray-600 leading-relaxed">
-                                        <span className="text-blue-400 mt-0.5 flex-shrink-0">›</span>{r}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                              )}
+                              {proj.responsibilities && proj.responsibilities.length > 0 && (
+                                <ul className="space-y-1">
+                                  {proj.responsibilities.map((r, k) => (
+                                    <li key={k} className="flex items-start gap-1.5 text-[15px] text-slate-600 leading-relaxed">
+                                      <span className="text-violet-400 mt-0.5 flex-shrink-0">›</span>{r}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="px-6 py-6">
-          <p className="text-sm text-gray-300 italic">No work experience added yet.</p>
+        <div className="px-5 py-5">
+          <p className="text-sm text-slate-300 italic">No work experience added yet.</p>
         </div>
       )}
     </SectionCard>

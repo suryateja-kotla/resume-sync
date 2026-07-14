@@ -185,7 +185,7 @@ function RemoveIconButton({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
+      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 transition-all duration-200 hover:bg-rose-50 hover:text-rose-600"
     >
       <IconTrash />
     </button>
@@ -354,9 +354,7 @@ interface SummaryModalProps {
   saving: boolean;
   saveMsg: string;
   summary: string;
-  experience: number;
   onSummaryChange: (v: string) => void;
-  onExperienceChange: (v: number) => void;
 }
 
 export function SummaryModal({
@@ -366,9 +364,7 @@ export function SummaryModal({
   saving,
   saveMsg,
   summary,
-  experience,
   onSummaryChange,
-  onExperienceChange,
 }: SummaryModalProps) {
   return (
     <Modal
@@ -406,27 +402,6 @@ export function SummaryModal({
           <p className="mt-2 text-xs text-slate-400">
             Aim for 3–5 impactful sentences covering your role, strengths, and key technologies.
           </p>
-        </div>
-
-        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div>
-            <p className="text-sm font-semibold text-slate-700">Total Experience</p>
-            <p className="mt-0.5 text-xs text-slate-400">
-              Your total professional experience, in years
-            </p>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
-            <div className="w-24">
-              <FormInput
-                type="number"
-                value={experience}
-                onChange={(v) => onExperienceChange(Number(v))}
-                min={0}
-                step={0.5}
-              />
-            </div>
-            <span className="text-sm font-medium text-slate-400">years</span>
-          </div>
         </div>
       </div>
     </Modal>

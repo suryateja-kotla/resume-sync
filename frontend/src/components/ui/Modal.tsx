@@ -91,7 +91,8 @@ export default function Modal({
         justify-center
         bg-slate-950/45
         backdrop-blur-md
-        p-5
+        p-3
+        sm:p-5
       "
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -129,13 +130,15 @@ export default function Modal({
             from-white
             via-violet-50/40
             to-indigo-50/30
-            px-8
-            py-6
+            px-5
+            py-4
+            sm:px-8
+            sm:py-6
             flex-shrink-0
           "
         >
           <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight text-slate-800">
+            <h2 className="text-lg font-semibold tracking-tight text-slate-800 sm:text-xl">
               {title}
             </h2>
 
@@ -147,10 +150,13 @@ export default function Modal({
           <button
             onClick={onClose}
             className="
-              ml-6
+              ml-4
+              sm:ml-6
               flex
-              h-10
-              w-10
+              h-9
+              w-9
+              sm:h-10
+              sm:w-10
               flex-shrink-0
               items-center
               justify-center
@@ -175,8 +181,10 @@ export default function Modal({
           className="
             flex-1
             overflow-y-auto
-            px-8
-            py-7
+            px-5
+            py-5
+            sm:px-8
+            sm:py-7
             space-y-6
           "
         >
@@ -190,8 +198,10 @@ export default function Modal({
             border-t
             border-slate-200
             bg-white
-            px-8
-            py-5
+            px-5
+            py-4
+            sm:px-8
+            sm:py-5
             flex-shrink-0
           "
         >
@@ -207,7 +217,7 @@ export default function Modal({
                 ${
                   saveMsg.toLowerCase().includes("success")
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-red-200 bg-red-50 text-red-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700"
                 }
               `}
             >

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Mail, Send, ArrowRight, Sparkles, UserPlus, CheckCircle2, AlertCircle, Clock3 } from 'lucide-react'
+import { Mail, Send, Sparkles, UserPlus, CheckCircle2, AlertCircle, Clock3 } from 'lucide-react'
 import api from '../../api/axios'
 import { NewEmployee } from '../../types/hr'
 
@@ -88,14 +88,14 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="rounded-[32px] border border-violet-100 bg-gradient-to-br from-violet-600 via-indigo-600 to-slate-900 p-6 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)]">
+        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
                 <Sparkles className="h-4 w-4" />
                 Welcome new joiners
               </div>
-              <h2 className="text-2xl font-semibold">Invite employees to start their resume journey</h2>
+              <h2 className="text-xl font-semibold sm:text-2xl">Invite employees to start their resume journey</h2>
               <p className="mt-2 max-w-2xl text-sm text-violet-100">
                 Send onboarding invitations by email and keep track of who is still pending their first resume upload.
               </p>
@@ -107,7 +107,8 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.25)]">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 sm:p-6">
+          <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600" />
           <div className="mb-4 flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-violet-600" />
             <h3 className="text-lg font-semibold text-slate-800">Send a new invite</h3>
@@ -120,14 +121,14 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
             onChange={e => setManualEmailInput(e.target.value)}
             placeholder={"name@sailssoftware.com\nPaste multiple addresses — one per line or comma separated"}
             rows={4}
-            className="w-full resize-none rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700 outline-none transition focus:border-violet-400 focus:bg-white"
+            className="w-full resize-none rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-700 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
           />
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-500">{emailCount} email{emailCount === 1 ? '' : 's'} ready to send</p>
             <button
               onClick={sendManualInvites}
               disabled={!manualEmailInput.trim() || manualSending}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-300"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-700 via-indigo-700 to-fuchsia-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/20 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
             >
               {manualSending ? (
                 <>
@@ -155,7 +156,8 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
           )}
         </div>
 
-        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.25)]">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 sm:p-6">
+          <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600" />
           <div className="mb-4 flex items-center gap-2">
             <Clock3 className="h-5 w-5 text-slate-600" />
             <h3 className="text-lg font-semibold text-slate-800">Still waiting for a resume</h3>
@@ -165,7 +167,7 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
             </div>
           ) : newEmployees.length === 0 ? (
-            <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
               Everyone already in the system has uploaded a resume. New onboarding entries without a resume will show here automatically.
             </div>
           ) : (
@@ -173,7 +175,7 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
               {newEmployees.map(emp => {
                 const status = inviteStatus[emp.email]
                 return (
-                  <div key={emp.employee_id} className="flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div key={emp.employee_id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 text-base font-semibold text-white">
                         {emp.name?.[0]?.toUpperCase() || 'E'}
@@ -194,7 +196,7 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
                         <button
                           onClick={() => sendInvite(emp.email)}
                           disabled={sendingInvite === emp.email}
-                          className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-300"
+                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-700 via-indigo-700 to-fuchsia-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-900/20 transition-all duration-200 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                         >
                           {sendingInvite === emp.email ? (
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

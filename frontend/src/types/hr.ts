@@ -119,14 +119,14 @@ export const AUDIT_EVENT_LABELS: Record<string, string> = {
 
 export const AUDIT_EVENT_COLORS: Record<string, string> = {
   LOGIN: 'bg-slate-100 text-slate-700',
-  RESUME_UPLOAD: 'bg-blue-50 text-blue-700',
+  RESUME_UPLOAD: 'bg-indigo-50 text-indigo-700',
   PROFILE_UPDATED: 'bg-violet-50 text-violet-700',
   SKILL_PROFILE_UPDATED: 'bg-violet-50 text-violet-700',
   RESUME_REGENERATED: 'bg-teal-50 text-teal-700',
   MONTHLY_UPDATE_SUBMITTED: 'bg-amber-50 text-amber-700',
   EMPLOYEE_DELETED: 'bg-red-50 text-red-700',
-  NEW_EMPLOYEE_PROVISIONED: 'bg-green-50 text-green-700',
-  INVITE_SENT: 'bg-blue-50 text-blue-700',
+  NEW_EMPLOYEE_PROVISIONED: 'bg-emerald-50 text-emerald-700',
+  INVITE_SENT: 'bg-sky-50 text-sky-700',
   EXCEL_REPORT_GENERATED: 'bg-emerald-50 text-emerald-700',
 }
 
@@ -153,5 +153,5 @@ export const SKILL_BADGE: Record<string, string> = {
 
 export function getSkillBadgeClass(skill?: string) {
   if (!skill) return 'bg-gray-100 text-gray-400 border border-gray-200'
-  return SKILL_BADGE[skill] ?? 'bg-blue-50 text-blue-700 border border-blue-200'
+  return SKILL_BADGE[skill] ?? 'bg-violet-50 text-violet-700 border border-violet-200'
 }

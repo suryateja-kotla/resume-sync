@@ -23,7 +23,7 @@ import {
   CertsModal, AchievementsModal, SkillProfileModal,
   EducationModal, InterestsModal, EducationEdit,
 } from '../components/employee/EditModals'
-import { SectionCard } from '../components/employee/ui'
+import { SectionCard, SectionHead } from '../components/employee/ui'
 
 // ── Completeness helper ────────────────────────────────────────────────────────
 
@@ -489,12 +489,12 @@ export default function EmployeeDashboard() {
       ) : profileLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-gray-400">Loading profile…</p>
+            <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-slate-400">Loading profile…</p>
           </div>
         </div>
       ) : (
-        <div className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-6 py-6 flex flex-col gap-5">
+        <div className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-6 py-5 flex flex-col gap-4">
 
           {resume && (
             <WelcomeBanner
@@ -507,7 +507,7 @@ export default function EmployeeDashboard() {
             />
           )}
 
-          <div className="flex flex-col lg:flex-row gap-5 items-start">
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
 
           {/* Left column */}
           <ProfileCard
@@ -521,12 +521,12 @@ export default function EmployeeDashboard() {
           />
 
           {/* Right column */}
-          <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
+          <div className="flex-1 min-w-0 w-full flex flex-col gap-4">
             {saveMsg && !activeModal && (
               <div className={`px-4 py-3 rounded-xl text-sm border ${
                 saveMsg.includes('success')
-                  ? 'bg-green-50 text-green-700 border-green-100'
-                  : 'bg-red-50 text-red-700 border-red-100'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                  : 'bg-rose-50 text-rose-700 border-rose-100'
               }`}>
                 {saveMsg}
               </div>
@@ -534,17 +534,17 @@ export default function EmployeeDashboard() {
 
             {!resume ? (
               <SectionCard>
-                <div className="px-6 py-12 text-center">
-                  <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="px-6 py-10 text-center">
+                  <div className="w-12 h-12 bg-violet-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
-                  <h3 className="text-base font-bold text-gray-700 mb-1">No profile data yet</h3>
-                  <p className="text-sm text-gray-400 mb-5">Upload your resume to get started.</p>
+                  <h3 className="text-base font-bold text-slate-700 mb-1">No profile data yet</h3>
+                  <p className="text-sm text-slate-400 mb-5">Upload your resume to get started.</p>
                   <button onClick={() => setShowUpload(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition">
+                    className="bg-gradient-to-r from-violet-700 via-indigo-700 to-fuchsia-700 hover:scale-[1.02] text-white px-6 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-indigo-900/20 transition-all duration-200">
                     Upload Resume
                   </button>
                 </div>
@@ -577,37 +577,26 @@ export default function EmployeeDashboard() {
                 />
                 {/* Interests */}
                 {(resume.interests && resume.interests.length > 0) && (
-                  <div className="bg-white rounded-2xl border border-[#ECEEF2] shadow-[0_10px_30px_rgba(0,0,0,0.06)] overflow-hidden">
-                    <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-blue-600">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                          </svg>
-                        </span>
-                        <span className="text-lg font-bold text-gray-800 leading-snug">Interests</span>
-                      </div>
-                      <button onClick={() => openModal('interests')}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 border border-gray-200 rounded-lg px-3 py-1.5 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                        Edit
-                      </button>
-                    </div>
-                    <div className="px-6 py-6 flex flex-wrap gap-2">
+                  <SectionCard>
+                    <SectionHead
+                      icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>}
+                      title="Interests"
+                      action="edit"
+                      onAction={() => openModal('interests')}
+                    />
+                    <div className="px-5 py-5 flex flex-wrap gap-2">
                       {resume.interests.map((interest, i) => (
                         <span key={i} className="bg-pink-50 text-pink-700 border border-pink-100 text-xs font-medium px-3 py-1.5 rounded-full">
                           {interest}
                         </span>
                       ))}
                     </div>
-                  </div>
+                  </SectionCard>
                 )}
                 {/* Add interests when none exist */}
                 {(!resume.interests || resume.interests.length === 0) && (
                   <button onClick={() => openModal('interests')}
-                    className="w-full text-left bg-white rounded-2xl border border-dashed border-gray-200 px-5 py-3.5 text-sm text-gray-400 hover:border-blue-300 hover:text-blue-500 hover:bg-blue-50/40 transition-all flex items-center gap-2">
+                    className="w-full text-left bg-white rounded-2xl border border-dashed border-slate-200 px-5 py-3.5 text-sm text-slate-400 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50/40 transition-all flex items-center gap-2">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
@@ -633,9 +622,7 @@ export default function EmployeeDashboard() {
         saving={saving}
         saveMsg={saveMsg}
         summary={editSummary}
-        experience={editExperience}
         onSummaryChange={setEditSummary}
-        onExperienceChange={setEditExperience}
       />
 
       <SkillsModal

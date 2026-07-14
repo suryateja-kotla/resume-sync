@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import api from '../../api/axios'
 import { AuditEvent, AUDIT_EVENT_TYPES, AUDIT_EVENT_LABELS, AUDIT_EVENT_COLORS } from '../../types/hr'
 
@@ -52,16 +53,34 @@ export default function AuditLogSection() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6">
+    <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
       <div className="max-w-5xl mx-auto space-y-4">
+        <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
+                <ShieldCheck className="h-4 w-4" />
+                Compliance trail
+              </div>
+              <h2 className="text-xl font-semibold sm:text-2xl">Audit Log</h2>
+              <p className="mt-2 text-sm text-violet-100">Track who changed what, and when, across the system.</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm backdrop-blur">
+              <p className="text-violet-100">Total events</p>
+              <p className="text-2xl font-semibold">{total}</p>
+            </div>
+          </div>
+        </div>
+
         {/* Filter bar */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap items-end gap-3">
+        <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200/70 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 p-4 flex flex-wrap items-end gap-3">
+          <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600" />
           <div className="flex-1 min-w-[180px]">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Event Type</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Event Type</label>
             <select
               value={eventTypeFilter}
               onChange={e => setEventTypeFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent text-slate-700 text-sm bg-white"
             >
               <option value="">All Events</option>
               {AUDIT_EVENT_TYPES.map(t => (
@@ -70,68 +89,70 @@ export default function AuditLogSection() {
             </select>
           </div>
           <div className="min-w-[150px]">
-            <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
             <input
               type="date" value={dateFrom}
               onChange={e => setDateFrom(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent text-slate-700 text-sm bg-white"
             />
           </div>
           <div className="min-w-[150px]">
-            <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
             <input
               type="date" value={dateTo}
               onChange={e => setDateTo(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-sm bg-white"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-transparent text-slate-700 text-sm bg-white"
             />
           </div>
-          <button onClick={applyFilters} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+          <button onClick={applyFilters} className="bg-gradient-to-r from-violet-700 via-indigo-700 to-fuchsia-700 hover:scale-[1.02] text-white text-sm font-medium px-4 py-2 rounded-lg transition-all duration-200 shadow-md shadow-indigo-900/20">
             Apply
           </button>
-          <button onClick={clearFilters} className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition">
+          <button onClick={clearFilters} className="text-slate-500 hover:text-slate-700 text-sm font-medium px-4 py-2 rounded-lg transition">
             Clear
           </button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-24">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : events.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">No audit events found</h3>
-            <p className="text-gray-400 text-sm">Events will appear here as employees and HR use the system.</p>
+          <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200/70 shadow-xl shadow-indigo-950/5 p-12 text-center">
+            <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600" />
+            <h3 className="text-lg font-semibold text-slate-700 mb-2">No audit events found</h3>
+            <p className="text-slate-400 text-sm">Events will appear here as employees and HR use the system.</p>
           </div>
         ) : (
           <>
-            <p className="text-gray-500 text-sm">{total} total event{total !== 1 ? 's' : ''}</p>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            <p className="text-slate-500 text-sm">{total} total event{total !== 1 ? 's' : ''}</p>
+            <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200/70 shadow-xl shadow-indigo-950/5 hover:shadow-2xl transition-all duration-200 divide-y divide-slate-100">
+              <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600 z-10" />
               {events.map(ev => (
                 <div key={ev._id}>
                   <button
                     onClick={() => setExpandedId(expandedId === ev._id ? null : ev._id)}
-                    className="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-gray-50/60 transition"
+                    className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 text-left transition hover:bg-violet-50/40 sm:flex-nowrap sm:gap-4 sm:px-5 sm:py-3.5"
                   >
-                    <span className="text-gray-400 text-xs whitespace-nowrap w-40 flex-shrink-0">
+                    <span className="text-slate-400 text-xs whitespace-nowrap flex-shrink-0 sm:w-40">
                       {new Date(ev.timestamp).toLocaleString()}
                     </span>
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${AUDIT_EVENT_COLORS[ev.event_type] || 'bg-gray-100 text-gray-700'}`}>
+                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${AUDIT_EVENT_COLORS[ev.event_type] || 'bg-slate-100 text-slate-700'}`}>
                       {AUDIT_EVENT_LABELS[ev.event_type] || ev.event_type}
                     </span>
-                    <span className="text-gray-700 text-sm truncate flex-shrink-0 w-32">{ev.actor}</span>
+                    <span className="text-slate-700 text-sm truncate flex-shrink-0 sm:w-32">{ev.actor}</span>
                     {ev.employee_id && ev.employee_id !== ev.actor && (
-                      <span className="text-gray-400 text-xs truncate">→ {ev.employee_id}</span>
+                      <span className="text-slate-400 text-xs truncate">→ {ev.employee_id}</span>
                     )}
                     <svg
-                      className={`w-4 h-4 text-gray-400 ml-auto flex-shrink-0 transition-transform ${expandedId === ev._id ? 'rotate-180' : ''}`}
+                      className={`w-4 h-4 text-slate-400 ml-auto flex-shrink-0 transition-transform ${expandedId === ev._id ? 'rotate-180' : ''}`}
                       fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                   {expandedId === ev._id && (
-                    <div className="px-5 pb-4 pt-1 bg-gray-50/40">
-                      <pre className="text-xs text-gray-600 bg-white border border-gray-100 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+                    <div className="px-5 pb-4 pt-1 bg-violet-50/30">
+                      <pre className="text-xs text-slate-600 bg-white border border-slate-100 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
                         {JSON.stringify(ev.payload, null, 2)}
                       </pre>
                     </div>
@@ -144,17 +165,17 @@ export default function AuditLogSection() {
                 <button
                   onClick={() => fetchAuditLog(page - 1)}
                   disabled={page <= 1}
-                  className="text-sm text-gray-600 hover:text-gray-800 disabled:text-gray-300 px-3 py-1.5 rounded-lg transition"
+                  className="text-sm text-slate-600 hover:text-slate-800 disabled:text-slate-300 px-3 py-1.5 rounded-lg transition"
                 >
                   ← Previous
                 </button>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-slate-400">
                   Page {page} of {Math.ceil(total / PAGE_SIZE)}
                 </span>
                 <button
                   onClick={() => fetchAuditLog(page + 1)}
                   disabled={page >= Math.ceil(total / PAGE_SIZE)}
-                  className="text-sm text-gray-600 hover:text-gray-800 disabled:text-gray-300 px-3 py-1.5 rounded-lg transition"
+                  className="text-sm text-slate-600 hover:text-slate-800 disabled:text-slate-300 px-3 py-1.5 rounded-lg transition"
                 >
                   Next →
                 </button>

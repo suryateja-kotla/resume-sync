@@ -128,14 +128,14 @@ export const SectionHead = ({
   actionLabel?: string;
   onAction?: () => void;
 }) => (
-  <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-white">
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 text-violet-700 ring-1 ring-violet-100">
+  <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-200 bg-white">
+    <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 text-violet-700 ring-1 ring-violet-100">
         {icon}
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight text-slate-800">
+      <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold tracking-tight text-slate-800 sm:text-lg">
           {title}
         </h2>
       </div>
@@ -146,14 +146,17 @@ export const SectionHead = ({
         onClick={onAction}
         className="
           inline-flex
+          flex-shrink-0
           items-center
           gap-2
           rounded-xl
           border
           border-slate-200
           bg-white
-          px-3.5
-          py-2
+          px-3
+          py-1.5
+          sm:px-3.5
+          sm:py-2
           text-sm
           font-medium
           text-slate-600
