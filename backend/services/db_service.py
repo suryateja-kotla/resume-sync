@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
 from constants.skill_categories import SKILL_CATEGORIES, normalize_skill
+from services.gcs_service import delete_resume
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,90 +45,6 @@ async def get_employee_by_email(email: str) -> Optional[Dict[str, Any]]:
         }
     except PyMongoError as e:
         logger.error(f"get_employee_by_email error: {e}")
-        return None
-
-
-async def provision_new_employee(email: str) -> Optional[Dict[str, Any]]:
-    """Auto-creates user_accounts + employee_skill_summary records the first
-    time someone logs in with an email not yet in the system.
-    Uses SS-based IDs from employee_skill_summary if the email matches,
-    otherwise generates a temporary PROV-prefixed ID until HR assigns an SS ID."""
-    try:
-        local_part = email.split("@")[0]
-        guessed_name = local_part.replace(".", " ").replace("_", " ").title() or email
-
-        # Check if this email already has an SS record in skill_summary
-        ss_doc = await col_employee_skill_summary.find_one(
-            {"email": {"$regex": f"^{email}$", "$options": "i"}},
-            {"_id": 0, "employee_id": 1, "name": 1},
-        )
-
-        if ss_doc:
-            employee_id = ss_doc["employee_id"]
-            guessed_name = ss_doc.get("name", guessed_name)
-        else:
-            # Generate a provisional ID — HR must assign real SS ID later
-            last = await col_user_accounts.find(
-                {"employeeId": {"$regex": "^PROV\\d+$"}},
-                {"_id": 0, "employeeId": 1},
-            ).sort("employeeId", -1).to_list(length=1)
-            next_num = 1
-            if last:
-                try:
-                    next_num = int(last[0]["employeeId"].replace("PROV", "")) + 1
-                except ValueError:
-                    next_num = 1
-            employee_id = f"PROV{next_num:03d}"
-
-        now = datetime.now(timezone.utc)
-        account_doc = {
-            "employeeId":  employee_id,
-            "email":       email,
-            "role":        "EMPLOYEE",
-            "status":      "Active",
-            "lastLoginAt": now,
-        }
-        await col_user_accounts.update_one(
-            {"employeeId": employee_id},
-            {"$setOnInsert": account_doc},
-            upsert=True,
-        )
-        account_doc.pop("_id", None)
-
-        # Seed a blank skill_summary entry if one doesn't exist yet
-        if not ss_doc:
-            await col_employee_skill_summary.update_one(
-                {"employee_id": employee_id},
-                {"$setOnInsert": {
-                    "employee_id":        employee_id,
-                    "name":               guessed_name,
-                    "email":              email,
-                    "current_designation": "",
-                    "current_skill":      "",
-                    "primary_skill":      "",
-                    "secondary_skill":    "",
-                    "total_exp":          0.0,
-                    "current_skill_exp":  0.0,
-                    "is_on_bench":        False,
-                    "skill_history":      [],
-                    "updated_at":         now,
-                }},
-                upsert=True,
-            )
-
-        # Return merged shape (same as get_employee_by_email)
-        skill = await col_employee_skill_summary.find_one(
-            {"employee_id": employee_id}, {"_id": 0}
-        ) or {}
-        return {
-            **account_doc,
-            "fullName":    skill.get("name", guessed_name),
-            "currentRole": skill.get("current_designation", ""),
-            "department":  skill.get("department", ""),
-            "isOnBench":   skill.get("is_on_bench", False),
-        }
-    except PyMongoError as e:
-        logger.error(f"provision_new_employee error for {email}: {e}")
         return None
 
 
@@ -524,6 +441,61 @@ async def get_full_employee_directory() -> list[Dict[str, Any]]:
         return []
 
 
+# ── Monthly-update response tracking ──────────────────────────────────────────
+#
+# Each employee's monthly-update status is one of three values shown in the HR
+# Employee List. The values are driven by the monthly scheduler flow:
+#
+#   "Updated"     — the employee updated their profile *after* this cycle's prompt
+#                   (monthly_response == "updated", set when they save changes, OR
+#                   updated_at is newer than monthly_prompt_sent_at).
+#   "Declined"    — the employee clicked "Decline / nothing to update" in the email
+#                   (monthly_response == "declined").
+#   "No Response" — the prompt was sent 7+ days ago and neither of the above happened.
+#   "Pending"     — a prompt is out but the 7-day window hasn't elapsed yet (still
+#                   waiting to hear back — not yet counted as No Response).
+#
+# NOTE: the endpoints that actually SET monthly_response ("updated"/"declined") and
+# monthly_prompt_sent_at are wired to the email-decline link + the monthly scheduler.
+# Those depend on the pending email/IT decision, so today this helper degrades
+# gracefully: with no prompt recorded it returns "No Response".
+
+MONTHLY_NO_RESPONSE_DAYS = 7
+
+
+def derive_monthly_response(doc: Dict[str, Any]) -> str:
+    """Derives the display status for an employee's monthly-update response.
+
+    Reads `monthly_response` (an explicit "updated"/"declined" set by the
+    employee action / decline link) and `monthly_prompt_sent_at` (when this
+    cycle's reminder went out). Falls back to comparing `updated_at` against the
+    prompt so a profile save still counts as "Updated" even if the explicit flag
+    wasn't set.
+    """
+    explicit = (doc.get("monthly_response") or "").lower()
+    if explicit == "declined":
+        return "Declined"
+
+    prompt_at = doc.get("monthly_prompt_sent_at")
+    updated_at = doc.get("updated_at") or doc.get("last_updated_at")
+
+    # Explicitly marked updated, or profile was saved after the prompt went out.
+    if explicit == "updated":
+        return "Updated"
+    if prompt_at and updated_at and updated_at >= prompt_at:
+        return "Updated"
+
+    # No update/decline recorded. If the 7-day window has elapsed → No Response,
+    # otherwise we're still waiting on them (Pending).
+    if prompt_at:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=MONTHLY_NO_RESPONSE_DAYS)
+        prompt_at_aware = prompt_at if prompt_at.tzinfo else prompt_at.replace(tzinfo=timezone.utc)
+        return "No Response" if prompt_at_aware <= cutoff else "Pending"
+
+    # No prompt on record at all — nothing to respond to yet.
+    return "No Response"
+
+
 async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
     """Returns all records from employee_skill_summary joined with resume_store
     for the Employee List table — no bench status, just skill profile fields.
@@ -545,6 +517,10 @@ async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
                 "current_skill": 1,
                 "total_exp": 1,
                 "current_skill_exp": 1,
+                # Monthly-update response tracking (populated by the monthly
+                # scheduler flow — see derive_monthly_response below).
+                "monthly_response": 1,
+                "monthly_prompt_sent_at": 1,
             },
         ).sort("employee_id", 1).to_list(length=None)
 
@@ -561,6 +537,10 @@ async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
             eid = d["employee_id"]
             d["resume_path"] = resume_paths.get(eid)
             d["resume_status"] = "Uploaded" if eid in resumed_ids else "Pending"
+            d["monthly_response"] = derive_monthly_response(d)
+            # Drop the raw fields the derivation consumed — the frontend only
+            # needs the final status string.
+            d.pop("monthly_prompt_sent_at", None)
         return docs
     except PyMongoError as e:
         logger.error(f"get_all_skill_summary_employees error: {e}")
@@ -593,16 +573,14 @@ async def get_bench_employees() -> list[Dict[str, Any]]:
 
 async def delete_employee(employee_id: str) -> Dict[str, Any]:
     """Hard-delete every record for this employee across all collections
-    and remove their generated DOCX file from disk."""
+    and remove their generated resume file from GCS."""
     try:
         resume_doc = await col_resume_store.find_one({"employee_id": employee_id})
         if resume_doc and resume_doc.get("resume_path"):
             try:
-                abs_path = os.path.abspath(resume_doc["resume_path"])
-                if os.path.isfile(abs_path):
-                    os.remove(abs_path)
+                delete_resume(resume_doc["resume_path"])
             except Exception as e:
-                logger.warning(f"delete_employee: could not remove file for {employee_id}: {e}")
+                logger.warning(f"delete_employee: could not remove resume blob for {employee_id}: {e}")
 
         await col_user_accounts.delete_one({"employeeId": employee_id})
         await col_employee_resume_data.delete_one({"employee_id": employee_id})

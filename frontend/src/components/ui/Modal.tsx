@@ -50,6 +50,10 @@ interface ModalProps {
   saveMsg: string;
   children: React.ReactNode;
 
+  // Disables Save until the user has actually changed something.
+  // Defaults to true (always enabled) for modals that don't track dirty state yet.
+  dirty?: boolean;
+
   // New API
   size?: ModalSize;
 
@@ -73,10 +77,13 @@ export default function Modal({
   saving,
   saveMsg,
   children,
+  dirty = true,
   size,
   wide,
 }: ModalProps) {
   if (!open) return null;
+
+  const saveDisabled = saving || !dirty;
 
   const widthClass = size ? modalWidths[size] : wide ? "max-w-3xl" : "max-w-xl";
 
@@ -254,7 +261,8 @@ export default function Modal({
             <button
               type="button"
               onClick={onSave}
-              disabled={saving}
+              disabled={saveDisabled}
+              title={!dirty && !saving ? "No changes to save" : undefined}
               className="
                 inline-flex
                 items-center
@@ -278,6 +286,7 @@ export default function Modal({
                 hover:shadow-xl
                 disabled:cursor-not-allowed
                 disabled:opacity-60
+                disabled:hover:scale-100
               "
             >
               {saving && <IconSpinner />}

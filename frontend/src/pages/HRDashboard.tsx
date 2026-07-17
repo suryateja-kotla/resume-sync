@@ -6,7 +6,6 @@ import {
   ChevronRight,
   LogOut,
   Menu,
-  Search,
   ShieldCheck,
   UserPlus,
   Users,
@@ -15,7 +14,6 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Section } from '../types/hr'
-import CandidateSearch from '../components/hr/CandidateSearch'
 import NewEmployeesSection from '../components/hr/NewEmployeesSection'
 import SkillDashboard from '../components/hr/SkillDashboard'
 import EmployeeListSection from '../components/hr/EmployeeListSection'
@@ -26,7 +24,7 @@ import AuditLogSection from '../components/hr/AuditLogSection'
 export default function HRDashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [section, setSection] = useState<Section>('search')
+  const [section, setSection] = useState<Section>('employee-list')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [newEmployeeCount, setNewEmployeeCount] = useState(0)
@@ -42,8 +40,7 @@ export default function HRDashboard() {
     setMobileNavOpen(false)
   }
 
-  const NAV_ITEMS: { key: Section; label: string; icon: typeof Search }[] = [
-    { key: 'search', label: 'Candidate Search', icon: Search },
+  const NAV_ITEMS: { key: Section; label: string; icon: typeof UserPlus }[] = [
     { key: 'new-employees', label: 'New Employees', icon: UserPlus },
     { key: 'skill-dashboard', label: 'Skill Dashboard', icon: BarChart3 },
     { key: 'employee-list', label: 'Employee List', icon: Users },
@@ -180,7 +177,6 @@ export default function HRDashboard() {
         </div>
 
         {/* Section bodies */}
-        {section === 'search'          && <CandidateSearch />}
         {section === 'new-employees'   && <NewEmployeesSection actorEmail={user?.email} onCountChange={setNewEmployeeCount} />}
         {section === 'skill-dashboard' && <SkillDashboard actorEmail={user?.email} />}
         {section === 'employee-list'   && <EmployeeListSection actorEmail={user?.email} />}

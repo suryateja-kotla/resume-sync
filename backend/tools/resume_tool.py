@@ -12,6 +12,7 @@ from services.db_service import (
     write_audit_event,
     get_resume_path,
 )
+from services.gcs_service import upload_resume, delete_resume
 from instructions.extraction_instruction import EXTRACTION_INSTRUCTION
 
 logger = logging.getLogger(__name__)
@@ -353,6 +354,9 @@ _RETRY_INSTRUCTION_SUFFIX = """
 IMPORTANT: The previous extraction attempt returned empty or missing values for: {missing}.
 Look carefully through ALL text AND every embedded image for this information.
 For technical_skills: check every image, table, sidebar, and list — skill data is often in image form.
+For work_experience: re-check whether the resume actually states a project name and/or client
+for each entry — if it does, extract it. If the resume genuinely does not mention one, leave it
+as an empty string; do not invent or substitute a value.
 Do NOT return empty arrays or empty objects for these fields.
 """
 
@@ -447,12 +451,13 @@ async def extract_resume(
 
 async def generate_resume_docx(employee_id: str) -> dict:
     """
-    Generate a formatted .docx resume from structured employee data.
+    Generate a formatted .docx resume from structured employee data and
+    upload it to GCS under employee-resumes/{employee_id}/.
     Args: employee_id
     Returns:
         A dict with:
           - status:      "success" or "error"
-          - resume_path: Absolute path to the generated .docx file (on success)
+          - resume_path: GCS blob name of the generated .docx file (on success)
           - message:     Error reason (on error)
     """
 
@@ -469,19 +474,19 @@ async def generate_resume_docx(employee_id: str) -> dict:
         if norm_result["status"] == "error":
             return norm_result
 
-        # Delete the old generated file if the filename will change
-        # (e.g. designation changed → new filename → stale old file)
-        old_path = await get_resume_path(employee_id)
-        if old_path and os.path.isfile(old_path):
-            new_filename = _docx_tool._build_output_filename(norm_result["data"])
-            if os.path.basename(old_path) != new_filename:
-                try:
-                    os.remove(old_path)
-                    logger.info(f"[{employee_id}] Removed stale resume: {old_path}")
-                except OSError:
-                    pass  # Non-fatal — new file will still be saved correctly
+        # Delete the old GCS blob if the filename will change
+        # (e.g. designation changed → new filename → stale old blob)
+        old_blob_name = await get_resume_path(employee_id)
+        new_filename = _docx_tool._build_output_filename(norm_result["data"])
+        if old_blob_name and os.path.basename(old_blob_name) != new_filename:
+            try:
+                delete_resume(old_blob_name)
+                logger.info(f"[{employee_id}] Removed stale resume blob: {old_blob_name}")
+            except Exception:
+                pass  # Non-fatal — new file will still be saved correctly
 
-        # Generate DOCX (always overwrites same filename if designation unchanged)
+        # Generate DOCX to a local temp path (always overwrites same filename
+        # if designation unchanged), then upload it to GCS.
         gen_result = _docx_tool.generate_resume(
             template_path=_TEMPLATE_PATH,
             normalized_data=norm_result["data"],
@@ -491,14 +496,18 @@ async def generate_resume_docx(employee_id: str) -> dict:
         if gen_result["status"] == "error":
             return gen_result
 
+        local_path = gen_result["data"]
+        blob_name = upload_resume(local_path, employee_id, new_filename)
+        os.remove(local_path)
+
         await write_audit_event(
             event_type="RESUME_REGENERATED",
             actor=employee_id,
             employee_id=employee_id,
-            payload={"resume_path": gen_result["data"]},
+            payload={"resume_path": blob_name},
         )
 
-        return {"status": "success", "resume_path": gen_result["data"]}
+        return {"status": "success", "resume_path": blob_name}
 
     except Exception as e:
         return {"status": "error", "message": f"Resume generation failed: {str(e)}"}

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Download, Filter, Sparkles, X } from 'lucide-react'
+import { Download, Filter, Sparkles, ArrowLeft, History } from 'lucide-react'
 import api from '../../api/axios'
 import { SkillRack, SkillEmployee, getSkillBadgeClass } from '../../types/hr'
 import { getSkillMeta } from './skillMeta'
+import SkillChips from './SkillChips'
 
 const EXP_FILTER_OPTIONS = [
   { value: '',  label: 'All Experience' },
@@ -94,6 +95,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
     <>
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-7xl space-y-5">
+          {!selectedSkill && (
           <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-700 via-indigo-700 to-fuchsia-700 p-5 text-white shadow-[0_25px_70px_-30px_rgba(79,70,229,0.7)] sm:p-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -110,8 +112,9 @@ export default function SkillDashboard({ actorEmail }: Props) {
               </div>
             </div>
           </div>
+          )}
 
-          {loading ? (
+          {selectedSkill ? null : loading ? (
             <div className="flex min-h-[50vh] items-center justify-center rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur">
               <div className="flex flex-col items-center gap-3">
                 <div className="h-10 w-10 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
@@ -156,14 +159,19 @@ export default function SkillDashboard({ actorEmail }: Props) {
               })}
             </div>
           )}
-        </div>
-      </div>
 
-      {selectedSkill && (
-        <div className="fixed inset-0 z-30 flex justify-end">
-          <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-md" onClick={goBack} />
-          <div className="relative flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
+          {selectedSkill && (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex-shrink-0 border-b border-slate-200 bg-gradient-to-r from-white via-violet-50/40 to-indigo-50/30 px-4 py-4 sm:px-6 sm:py-5">
+              {/* Back to skill racks */}
+              <button
+                onClick={goBack}
+                className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to skills
+              </button>
+
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                   <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border ${getSkillMeta(selectedSkill).bg}`}>
@@ -176,9 +184,6 @@ export default function SkillDashboard({ actorEmail }: Props) {
                     </p>
                   </div>
                 </div>
-                <button onClick={goBack} className="flex-shrink-0 rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                  <X className="h-5 w-5" />
-                </button>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -212,7 +217,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+            <div className="px-4 py-5 sm:px-6">
               {skillEmployeesLoading ? (
                 <div className="flex items-center justify-center py-24">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
@@ -220,31 +225,29 @@ export default function SkillDashboard({ actorEmail }: Props) {
               ) : skillEmployees.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">No employees match this filter.</div>
               ) : (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {skillEmployees.map(emp => (
-                    <div key={emp.employee_id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-sm">
-                      <div className="mb-3 flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-sm font-semibold text-white">
+                    <div key={emp.employee_id} className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-sm">
+                      <div className="mb-3 flex items-start gap-3">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-sm font-semibold text-white">
                           {emp.name?.[0]?.toUpperCase() || '?'}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-slate-800">{emp.name}</p>
-                          <a href={`mailto:${emp.email}`} className="text-sm text-violet-600 hover:underline">{emp.email}</a>
+                          <a href={`mailto:${emp.email}`} className="block truncate text-sm text-violet-600 hover:underline">{emp.email}</a>
                         </div>
-                        <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-500">
+                        <span className="flex-shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-500">
                           {emp.employee_id}
                         </span>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                         <div className="rounded-2xl border border-slate-200 bg-white p-3">
                           <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Designation</p>
                           <p className="text-sm font-medium text-slate-700">{emp.current_designation || '—'}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                          <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Current Skill</p>
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getSkillBadgeClass(emp.current_skill)}`}>
-                            {emp.current_skill || '—'}
-                          </span>
+                        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3">
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Current Skill</p>
+                          <SkillChips value={emp.current_skill} maxChips={2} />
                         </div>
                         <div className="rounded-2xl border border-slate-200 bg-white p-3">
                           <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Total Exp</p>
@@ -254,21 +257,34 @@ export default function SkillDashboard({ actorEmail }: Props) {
                           <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Skill Exp</p>
                           <p className="text-sm font-medium text-slate-700">{emp.current_skill_exp} yrs</p>
                         </div>
-                        {emp.primary_skill && (
-                          <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:col-span-2">
-                            <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Primary & Secondary</p>
-                            <p className="text-sm font-medium text-slate-700">{emp.primary_skill}{emp.secondary_skill ? ` · ${emp.secondary_skill}` : ''}</p>
-                          </div>
-                        )}
+                        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3">
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Primary Skill</p>
+                          <SkillChips value={emp.primary_skill} maxChips={2} />
+                        </div>
+                        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3">
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Secondary Skill</p>
+                          <SkillChips value={emp.secondary_skill} maxChips={2} />
+                        </div>
                       </div>
+
+                      {emp.skill_history && emp.skill_history.length > 0 && (
+                        <button
+                          onClick={() => setHistoryModal(emp)}
+                          className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+                        >
+                          <History className="h-4 w-4" />
+                          View Skill History
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
+          )}
         </div>
-      )}
+      </div>
 
       {historyModal && (
                 <div className="fixed inset-0 z-40 flex items-center justify-center p-4">

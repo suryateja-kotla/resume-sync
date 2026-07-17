@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
+import { setTokenRefreshedHandler } from '../api/axios'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,6 @@ interface User {
 interface AuthContextType {
   user: User | null
   accessToken: string | null
-  refreshToken: string | null
   login: (user: User, accessToken: string, refreshToken: string) => void
   logout: () => void
   updateTokens: (accessToken: string) => void
@@ -71,14 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.getItem(KEYS.accessToken)
   )
 
-  const [refreshToken, setRefreshToken] = useState<string | null>(() =>
-    localStorage.getItem(KEYS.refreshToken)
-  )
-
   const login = useCallback((userData: User, access: string, refresh: string) => {
     setUser(userData)
     setAccessToken(access)
-    setRefreshToken(refresh)
     localStorage.setItem(KEYS.user,         JSON.stringify(userData))
     localStorage.setItem(KEYS.accessToken,  access)
     localStorage.setItem(KEYS.refreshToken, refresh)
@@ -87,7 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null)
     setAccessToken(null)
-    setRefreshToken(null)
     localStorage.removeItem(KEYS.user)
     localStorage.removeItem(KEYS.accessToken)
     localStorage.removeItem(KEYS.refreshToken)
@@ -98,6 +92,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(newAccess)
     localStorage.setItem(KEYS.accessToken, newAccess)
   }, [])
+
+  // Register so axios.ts (outside the React tree) can keep this state in
+  // sync after a silent 401 refresh, instead of only updating localStorage.
+  useEffect(() => {
+    setTokenRefreshedHandler(updateTokens)
+    return () => setTokenRefreshedHandler(() => {})
+  }, [updateTokens])
 
   // Called after the user completes their forced password change
   const clearMustChangePassword = useCallback(() => {
@@ -111,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, accessToken, refreshToken,
+      user, accessToken,
       login, logout, updateTokens, clearMustChangePassword,
     }}>
       {children}

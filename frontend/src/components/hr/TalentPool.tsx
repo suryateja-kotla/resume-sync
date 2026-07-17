@@ -1,16 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Sparkles, Users, BriefcaseBusiness, ArrowRight } from 'lucide-react'
 import api from '../../api/axios'
-import { SkillEmployee, getSkillBadgeClass } from '../../types/hr'
-
-const EXP_FILTERS = [
-  { value: 0,  label: 'All' },
-  { value: 1,  label: '1+ yrs' },
-  { value: 2,  label: '2+ yrs' },
-  { value: 3,  label: '3+ yrs' },
-  { value: 5,  label: '5+ yrs' },
-  { value: 8,  label: '8+ yrs' },
-]
+import { SkillEmployee } from '../../types/hr'
+import SkillChips from './SkillChips'
 
 interface Props {
   onCountChange: (count: number) => void
@@ -19,9 +11,6 @@ interface Props {
 export default function TalentPool({ onCountChange }: Props) {
   const [benchEmployees, setBenchEmployees] = useState<SkillEmployee[]>([])
   const [loading, setLoading] = useState(false)
-  const [skillFilter, setSkillFilter] = useState<string>('')
-  const [expFilter, setExpFilter] = useState<number>(0)
-  const [search, setSearch] = useState('')
 
   useEffect(() => { fetchBenchEmployees() }, [])
 
@@ -76,29 +65,27 @@ export default function TalentPool({ onCountChange }: Props) {
           <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {benchEmployees.map(emp => (
               <div key={emp.employee_id} className="group min-w-0 rounded-2xl border border-violet-100 bg-white p-5 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.2)] transition duration-200 hover:-translate-y-1 hover:border-violet-300 hover:shadow-[0_20px_45px_-25px_rgba(99,102,241,0.45)]">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-sm font-semibold text-white shadow-sm">
+                <div className="mb-4 flex items-start gap-3">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-sm font-semibold text-white shadow-sm">
                     {emp.name?.[0]?.toUpperCase() || '?'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-slate-800">{emp.name}</p>
+                    <p className="font-semibold text-slate-800">{emp.name}</p>
                     <a href={`mailto:${emp.email}`} className="block truncate text-sm text-violet-600 hover:underline">{emp.email}</a>
                   </div>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+                  <span className="flex-shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
                     {emp.employee_id}
                   </span>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Designation</p>
                     <p className="text-sm font-medium text-slate-700">{emp.current_designation || '—'}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Current Skill</p>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getSkillBadgeClass(emp.current_skill)}`}>
-                      {emp.current_skill || '—'}
-                    </span>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Current Skill</p>
+                    <SkillChips value={emp.current_skill} maxChips={2} />
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Total Exp</p>
@@ -107,6 +94,14 @@ export default function TalentPool({ onCountChange }: Props) {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Skill Exp</p>
                     <p className="text-sm font-medium text-slate-700">{emp.current_skill_exp ?? '—'} yrs</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Primary Skill</p>
+                    <SkillChips value={emp.primary_skill} maxChips={2} />
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Secondary Skill</p>
+                    <SkillChips value={emp.secondary_skill} maxChips={2} />
                   </div>
                 </div>
 

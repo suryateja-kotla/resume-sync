@@ -1,7 +1,5 @@
-from fastapi import UploadFile
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
-from datetime import datetime, UTC
 
 
 class PersonalInfo(BaseModel):
@@ -15,7 +13,7 @@ class Company(BaseModel):
 
 class Project(BaseModel):
     name: Optional[str] = None
-    client: Optional[str] = "Internal"
+    client: Optional[str] = None
     role: Optional[str] = None
     environment: List[str] = Field(default_factory=list)
     project_description: Optional[str] = None
@@ -54,76 +52,6 @@ class EmployeePayload(BaseModel):
         for values in self.technical_skills.values():
             tags.extend(values)
         return list(set(tags))
-
-
-class BulkEmployees(BaseModel):
-    employees: List[EmployeePayload]
-
-
-class UserAccountDocument(BaseModel):
-    """Mirrors user_accounts collection — auth/access only."""
-
-    employeeId: str
-    email: str
-    role: str = "EMPLOYEE"
-    status: str = "Active"
-    lastLoginAt: Optional[datetime] = None
-
-
-class ResumeStoreDocument(BaseModel):
-    """Mirrors resume_store collection."""
-
-    employee_id: str
-    resume_path: str
-    last_updated_at: datetime = Field(default_factory=datetime.now(UTC))
-
-
-class AuditEventDocument(BaseModel):
-    """Mirrors audit_data collection."""
-
-    employeeId: str
-    timestamp: datetime = Field(default_factory=datetime.now(UTC))
-    action: str
-    details: Optional[Dict[str, Any]] = None
-
-
-class UploadResumeRequest(BaseModel):
-    file: UploadFile
-    employee_id: str
-    email: Optional[str] = None
-
-
-class IngestionResult(BaseModel):
-    status: str
-    employee_id: Optional[str] = None
-    resume_docx_path: Optional[str] = None
-    message: Optional[str] = None
-
-
-# Auth schemas
-class LoginRequest(BaseModel):
-    email: str
-
-
-class LoginResponse(BaseModel):
-    email: str
-    role: str
-    employeeId: Optional[str] = None
-    fullName: Optional[str] = None
-
-
-class CandidateSearchRequest(BaseModel):
-    query: str
-    employee_id: Optional[str] | None = None
-    session_id: Optional[str] | None = None
-
-
-class CandidateResult(BaseModel):
-    name: str
-    skills: List[str]
-    experience: int
-    email: str
-    isOnBench: bool = False
 
 
 # Employee profile

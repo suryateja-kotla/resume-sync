@@ -3,19 +3,11 @@ import os
 import datetime
 import pandas as pd
 import logging
+from services.gcs_service import get_signed_url
 
 logger = logging.getLogger(__name__)
 
 _OUTPUT_DIR = os.getenv("EXCEL_OUTPUT_DIR", "output_excels")
-
-
-def _to_file_url(path: str) -> str:
-    """Converts a local Windows/POSIX file path into a file:// URI that
-    Excel's real hyperlink mechanism can open reliably."""
-    normalized = path.replace("\\", "/")
-    if not normalized.startswith("/"):
-        normalized = "/" + normalized
-    return "file://" + normalized
 
 
 def create_talent_excel(employee_data_json: str) -> dict:
@@ -66,12 +58,20 @@ def create_talent_excel(employee_data_json: str) -> dict:
                 {"font_color": "blue", "underline": 1}
             )
             resume_col = df.columns.get_loc("Resume")
-            for row_idx, path in enumerate(resume_paths, start=1):  # +1 for header row
-                if path and not pd.isna(path):
-                    worksheet.write_url(
-                        row_idx, resume_col, _to_file_url(path),
-                        cell_format=link_format, string="Open Resume",
-                    )
+            for row_idx, blob_name in enumerate(resume_paths, start=1):  # +1 for header row
+                if blob_name and not pd.isna(blob_name):
+                    try:
+                        # Signed URL valid for 7 days — long enough for HR to
+                        # revisit a downloaded report without re-generating it,
+                        # short enough that a leaked report doesn't leak resumes forever.
+                        url = get_signed_url(blob_name, expires_in_minutes=7 * 24 * 60)
+                        worksheet.write_url(
+                            row_idx, resume_col, url,
+                            cell_format=link_format, string="Open Resume",
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to sign URL for {blob_name}: {e}")
+                        worksheet.write(row_idx, resume_col, "Link unavailable")
 
         writer.close()
         return {

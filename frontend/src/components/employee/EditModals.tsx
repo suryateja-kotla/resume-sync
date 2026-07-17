@@ -353,6 +353,7 @@ interface SummaryModalProps {
   onSave: () => void;
   saving: boolean;
   saveMsg: string;
+  dirty?: boolean;
   summary: string;
   onSummaryChange: (v: string) => void;
 }
@@ -363,6 +364,7 @@ export function SummaryModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   summary,
   onSummaryChange,
 }: SummaryModalProps) {
@@ -375,6 +377,7 @@ export function SummaryModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
       size="md"
     >
       <div className="space-y-7">
@@ -421,6 +424,7 @@ interface SkillsModalProps {
   onSave: () => void;
   saving: boolean;
   saveMsg: string;
+  dirty?: boolean;
   editSkills: SkillRow[];
   onSkillsChange: (rows: SkillRow[]) => void;
 }
@@ -430,6 +434,7 @@ export function SkillsModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   editSkills,
   onSkillsChange,
 }: SkillsModalProps) {
@@ -442,6 +447,7 @@ export function SkillsModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
       size="md"
     >
       <div className="space-y-4">
@@ -524,6 +530,7 @@ interface ExperienceModalProps {
   onSave: () => void;
   saving: boolean;
   saveMsg: string;
+  dirty?: boolean;
   editWorkExps: WorkExpEdit[];
   openEntries: Set<number>;
   openProjects: Set<string>;
@@ -552,6 +559,7 @@ export function ExperienceModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   editWorkExps,
   openEntries,
   openProjects,
@@ -573,6 +581,7 @@ export function ExperienceModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
       wide
     >
       <div className="space-y-3">
@@ -821,6 +830,7 @@ interface ListModalProps {
   onSave: () => void;
   saving: boolean;
   saveMsg: string;
+  dirty?: boolean;
   items: string[];
   onItemsChange: (items: string[]) => void;
   title: string;
@@ -837,6 +847,7 @@ function ListModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   items,
   onItemsChange,
   title,
@@ -855,6 +866,7 @@ function ListModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
     >
       <div className="space-y-2.5">
         {items.map((item, idx) => (
@@ -882,6 +894,7 @@ export function CertsModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   items,
   onItemsChange,
 }: Omit<
@@ -895,6 +908,7 @@ export function CertsModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
       items={items}
       onItemsChange={onItemsChange}
       title="Edit Certifications"
@@ -913,6 +927,7 @@ export function AchievementsModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   items,
   onItemsChange,
 }: Omit<
@@ -926,6 +941,7 @@ export function AchievementsModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
       items={items}
       onItemsChange={onItemsChange}
       title="Edit Achievements"
@@ -946,6 +962,7 @@ interface SkillProfileModalProps {
   onSave: () => void;
   saving: boolean;
   saveMsg: string;
+  dirty?: boolean;
   employeeId?: string;
   name?: string;
   email?: string;
@@ -972,6 +989,7 @@ export function SkillProfileModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   employeeId,
   name,
   email,
@@ -1000,6 +1018,7 @@ export function SkillProfileModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
       wide
     >
       <div className="space-y-6">
@@ -1138,6 +1157,7 @@ interface EducationModalProps {
   onSave: () => void;
   saving: boolean;
   saveMsg: string;
+  dirty?: boolean;
   items: EducationEdit[];
   onItemsChange: (items: EducationEdit[]) => void;
 }
@@ -1155,6 +1175,7 @@ export function EducationModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   items,
   onItemsChange,
 }: EducationModalProps) {
@@ -1172,6 +1193,7 @@ export function EducationModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
     >
       <div className="space-y-3">
         {items.map((edu, idx) => (
@@ -1247,6 +1269,7 @@ interface InterestsModalProps {
   onSave: () => void;
   saving: boolean;
   saveMsg: string;
+  dirty?: boolean;
   items: string[];
   onItemsChange: (items: string[]) => void;
 }
@@ -1257,6 +1280,7 @@ export function InterestsModal({
   onSave,
   saving,
   saveMsg,
+  dirty,
   items,
   onItemsChange,
 }: InterestsModalProps) {
@@ -1269,6 +1293,7 @@ export function InterestsModal({
       onSave={onSave}
       saving={saving}
       saveMsg={saveMsg}
+      dirty={dirty}
     >
       <div className="space-y-2.5">
         {items.map((item, idx) => (

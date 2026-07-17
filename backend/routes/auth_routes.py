@@ -101,7 +101,7 @@ async def _get_full_name(employee_id: str) -> str:
 # ── POST /auth/login ──────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=LoginResponse)
-@limiter.limit("5/15minute")
+@limiter.limit("10/15minute")
 async def login(request: Request, body: LoginRequest):
     """
     Authenticates an employee with email + password.
@@ -155,13 +155,6 @@ async def login(request: Request, body: LoginRequest):
             "refresh_token_hash": refresh_hash,
             "lastLoginAt": datetime.now(timezone.utc),
         }},
-    )
-
-    await write_audit_event(
-        event_type="LOGIN",
-        actor=employee_id,
-        employee_id=employee_id,
-        payload={"email": body.email, "role": role},
     )
 
     full_name = await _get_full_name(employee_id)
@@ -223,12 +216,6 @@ async def logout(
     await col_user_accounts.update_one(
         {"employeeId": current_user["employee_id"]},
         {"$unset": {"refresh_token_hash": ""}},
-    )
-    await write_audit_event(
-        event_type="LOGOUT",
-        actor=current_user["employee_id"],
-        employee_id=current_user["employee_id"],
-        payload={},
     )
     return {"status": "success", "message": "Logged out successfully."}
 

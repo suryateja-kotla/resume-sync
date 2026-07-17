@@ -15,6 +15,9 @@ python-dotenv
 pymongo
 motor
 
+# Google Cloud Storage (resume file storage)
+google-cloud-storage
+
 # MCP server
 fastmcp
 
@@ -22,9 +25,11 @@ fastmcp
 python-docx
 xlsxwriter
 pandas
+openpyxl
 
 # PDF reading (for resume extraction)
 PyMuPDF                 # fitz — fast PDF text + image extraction
+Pillow                  # PIL — embedded image extraction from DOCX resumes
 
 # Auth
 python-jose[cryptography]

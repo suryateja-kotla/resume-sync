@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, Download, Sparkles } from 'lucide-react'
+import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, Download, Sparkles, CalendarCheck } from 'lucide-react'
 import api from '../../api/axios'
-import { SkillSummaryRow, getSkillBadgeClass } from '../../types/hr'
+import { SkillSummaryRow, MonthlyResponse, MONTHLY_RESPONSE_BADGE, getSkillBadgeClass } from '../../types/hr'
 
 interface Props {
   actorEmail?: string
@@ -163,11 +163,11 @@ export default function EmployeeListSection({ actorEmail }: Props) {
             <div className="min-w-0 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 rounded-2xl bg-emerald-50 p-2.5 text-emerald-600">
-                  <BadgeCheck className="h-5 w-5" />
+                  <CalendarCheck className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm text-slate-500">Resume ready</p>
-                  <p className="text-xl font-semibold text-slate-800">{allEmployees.filter(emp => emp.resume_path).length}</p>
+                  <p className="text-sm text-slate-500">Updated this month</p>
+                  <p className="text-xl font-semibold text-slate-800">{allEmployees.filter(emp => emp.monthly_response === 'Updated').length}</p>
                 </div>
               </div>
             </div>
@@ -194,7 +194,7 @@ export default function EmployeeListSection({ actorEmail }: Props) {
                     <th className="px-5 py-3.5">Designation</th>
                     <th className="px-5 py-3.5">Current Skill</th>
                     <th className="px-5 py-3.5">Experience</th>
-                    <th className="px-5 py-3.5">Resume</th>
+                    <th className="px-5 py-3.5">Monthly Status</th>
                     <th className="px-5 py-3.5">Actions</th>
                   </tr>
                 </thead>
@@ -216,7 +216,7 @@ export default function EmployeeListSection({ actorEmail }: Props) {
                       <td className="px-5 py-4 text-slate-600">{emp.current_designation || <span className="text-slate-400">—</span>}</td>
                       <td className="px-5 py-4">
                         {emp.current_skill ? (
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getSkillBadgeClass(emp.current_skill)}`}>
+                          <span className={`inline-block w-fit whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${getSkillBadgeClass(emp.current_skill)}`}>
                             {emp.current_skill}
                           </span>
                         ) : <span className="text-slate-400">—</span>}
@@ -228,16 +228,15 @@ export default function EmployeeListSection({ actorEmail }: Props) {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        {emp.resume_path ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                            <BadgeCheck className="h-3.5 w-3.5" />
-                            Uploaded
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
-                            Pending
-                          </span>
-                        )}
+                        {(() => {
+                          const status: MonthlyResponse = emp.monthly_response || 'No Response'
+                          return (
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${MONTHLY_RESPONSE_BADGE[status]}`}>
+                              {status === 'Updated' && <BadgeCheck className="h-3.5 w-3.5" />}
+                              {status}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="px-5 py-4">
                         <button

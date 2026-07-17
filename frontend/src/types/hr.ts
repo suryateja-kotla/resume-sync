@@ -1,24 +1,4 @@
-export type Section = 'search' | 'new-employees' | 'skill-dashboard' | 'employee-list' | 'talent-pool' | 'audit-log' | 'metrics'
-
-export interface Candidate {
-  employee_id: string
-  name: string
-  email: string
-  currentRole: string
-  skills: string[]
-  experience: number
-  resume_path?: string
-  isOnBench?: boolean
-}
-
-export interface Message {
-  id: number
-  type: 'user' | 'assistant'
-  text?: string
-  candidates?: Candidate[]
-  excel_filename?: string
-  loading?: boolean
-}
+export type Section = 'new-employees' | 'skill-dashboard' | 'employee-list' | 'talent-pool' | 'audit-log' | 'metrics'
 
 export interface NewEmployee {
   employee_id: string
@@ -53,6 +33,8 @@ export interface SkillEmployee {
   skill_history?: SkillHistoryEntry[]
 }
 
+export type MonthlyResponse = 'Updated' | 'Declined' | 'No Response' | 'Pending'
+
 export interface SkillSummaryRow {
   employee_id: string
   name: string
@@ -62,6 +44,14 @@ export interface SkillSummaryRow {
   total_exp: number | string
   current_skill_exp: number | string
   resume_path?: string
+  monthly_response?: MonthlyResponse
+}
+
+export const MONTHLY_RESPONSE_BADGE: Record<MonthlyResponse, string> = {
+  'Updated':     'border-emerald-200 bg-emerald-50 text-emerald-700',
+  'Declined':    'border-amber-200 bg-amber-50 text-amber-700',
+  'No Response': 'border-rose-200 bg-rose-50 text-rose-700',
+  'Pending':     'border-slate-200 bg-slate-50 text-slate-500',
 }
 
 export interface AuditEvent {
@@ -92,7 +82,6 @@ export interface HRMetrics {
 }
 
 export const AUDIT_EVENT_TYPES = [
-  'LOGIN',
   'RESUME_UPLOAD',
   'PROFILE_UPDATED',
   'SKILL_PROFILE_UPDATED',
@@ -100,12 +89,10 @@ export const AUDIT_EVENT_TYPES = [
   'MONTHLY_UPDATE_SUBMITTED',
   'NEW_EMPLOYEE_PROVISIONED',
   'INVITE_SENT',
-  'EXCEL_REPORT_GENERATED',
   'EMPLOYEE_DELETED',
 ]
 
 export const AUDIT_EVENT_LABELS: Record<string, string> = {
-  LOGIN: 'Login',
   RESUME_UPLOAD: 'Resume Upload',
   PROFILE_UPDATED: 'Profile Updated',
   SKILL_PROFILE_UPDATED: 'Skill Profile Updated',
@@ -113,12 +100,14 @@ export const AUDIT_EVENT_LABELS: Record<string, string> = {
   MONTHLY_UPDATE_SUBMITTED: 'Monthly Update Submitted',
   NEW_EMPLOYEE_PROVISIONED: 'New Employee Provisioned',
   INVITE_SENT: 'Invite Sent',
-  EXCEL_REPORT_GENERATED: 'Excel Report Generated',
   EMPLOYEE_DELETED: 'Employee Deleted',
+  // Legacy labels — kept so historical events (pre-cleanup) still render nicely
+  LOGIN: 'Login',
+  LOGOUT: 'Logout',
+  EXCEL_REPORT_GENERATED: 'Excel Report Generated',
 }
 
 export const AUDIT_EVENT_COLORS: Record<string, string> = {
-  LOGIN: 'bg-slate-100 text-slate-700',
   RESUME_UPLOAD: 'bg-indigo-50 text-indigo-700',
   PROFILE_UPDATED: 'bg-violet-50 text-violet-700',
   SKILL_PROFILE_UPDATED: 'bg-violet-50 text-violet-700',
@@ -127,6 +116,9 @@ export const AUDIT_EVENT_COLORS: Record<string, string> = {
   EMPLOYEE_DELETED: 'bg-red-50 text-red-700',
   NEW_EMPLOYEE_PROVISIONED: 'bg-emerald-50 text-emerald-700',
   INVITE_SENT: 'bg-sky-50 text-sky-700',
+  // Legacy colors — for historical events still in the DB
+  LOGIN: 'bg-slate-100 text-slate-700',
+  LOGOUT: 'bg-slate-100 text-slate-700',
   EXCEL_REPORT_GENERATED: 'bg-emerald-50 text-emerald-700',
 }
 

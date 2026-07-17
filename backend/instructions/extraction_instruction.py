@@ -42,7 +42,7 @@ Critical rules:
 - Extract EVERY work experience entry — do not skip older roles.
 - For each work experience:
   - If the resume has a project table with rows labeled Project, Client, Role, Environment: map those to project.name, project.client, project.role, project.environment.
-  - If the resume has NO dedicated project table (e.g. responsibilities are listed directly under the job title): set project.name to the job/project title if one is mentioned, otherwise use the designation as project.name. Set project.client to the company name. Set project.role to the designation. Extract all responsibility bullets into project.responsibilities. NEVER leave project.name as an empty string — always use designation as the fallback.
+  - If the resume has NO dedicated project table (e.g. responsibilities are listed directly under the job title): set project.name to the job/project title if one is explicitly mentioned in the resume, and project.client to the client name if explicitly mentioned. Do NOT invent or substitute a value — if the resume does not state a project name or client, leave project.name / project.client as an empty string. Never use the designation or company name as a stand-in for a project name or client. Set project.role to the designation. Extract all responsibility bullets into project.responsibilities.
   - Extract any project description paragraph (what the project/product does) into project.project_description.
   - Extract the tech stack / technologies mentioned under each role into project.environment as an array.
 - total_experience must be a number (float allowed, e.g. 1.5 for 18 months).

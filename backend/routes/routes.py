@@ -9,6 +9,7 @@ import logging
 from constants.skill_categories import SKILL_CATEGORIES
 from tools.resume_tool import generate_resume_docx
 from tools.excel_tools import create_talent_excel
+from services.gcs_service import delete_resume
 from services.db_service import (
     get_audit_log,
     get_all_skill_summary_employees,
@@ -22,7 +23,6 @@ from services.db_service import (
     get_new_employees,
     get_resume_path,
     get_skill_rack_summary,
-    provision_new_employee,
     save_employee_resume_data,
     upsert_employee_skill_summary,
     upsert_resume_path,
@@ -30,9 +30,6 @@ from services.db_service import (
     delete_employee,
 )
 from schemas.schemas import (
-    LoginRequest,
-    LoginResponse,
-    CandidateSearchRequest,
     ProfileUpdateRequest,
     SkillSummaryUpdateRequest,
     SendResumeInviteRequest,
@@ -45,38 +42,6 @@ logger = logging.getLogger(__name__)
 @router.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-
-@router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
-    emp = await get_employee_by_email(request.email)
-    if not emp:
-        # First login for this email — auto-provision as a new employee so
-        # anyone who received an onboarding invite can log in immediately
-        # and land on the Upload Resume tab.
-        emp = await provision_new_employee(request.email)
-        if emp:
-            await write_audit_event(
-                event_type="NEW_EMPLOYEE_PROVISIONED",
-                actor="SYSTEM",
-                employee_id=emp.get("employeeId"),
-                payload={"email": request.email},
-            )
-
-    if emp:
-        await write_audit_event(
-            event_type="LOGIN",
-            actor=emp.get("employeeId", request.email),
-            employee_id=emp.get("employeeId"),
-            payload={"email": request.email, "role": emp.get("role")},
-        )
-
-    return LoginResponse(
-        email=request.email,
-        role=emp.get("role") if emp else None,
-        employeeId=emp.get("employeeId") if emp else None,
-        fullName=emp.get("fullName") if emp else None,
-    )
 
 
 @router.get("/employee-profile")
@@ -159,17 +124,10 @@ async def update_employee_profile(request: ProfileUpdateRequest):
     existing_resume_path = await get_resume_path(employee_id)
     if existing_resume_path:
         try:
-            abs_path = os.path.abspath(existing_resume_path)
-            logger.info(f"Existing resume path for {employee_id}: {abs_path}")
-
-            if os.path.exists(abs_path):
-                os.remove(abs_path)
-                logger.info(f"Deleted old resume: {abs_path}")
-            else:
-                logger.warning(f"Skipping delete, not a file: {abs_path}")
-
+            delete_resume(existing_resume_path)
+            logger.info(f"Deleted old resume blob: {existing_resume_path}")
         except Exception as e:
-            logger.error(f"Failed to remove old resume file: {e}")
+            logger.error(f"Failed to remove old resume blob: {e}")
     logger.info(f"Generating resume docx for {employee_id}")
     result = await generate_resume_docx(employee_id)
     logger.info(f"generate_resume_docx result for {employee_id}: {result}")
@@ -384,17 +342,6 @@ async def skill_employees_excel(
         raise HTTPException(status_code=500, detail=result.get("message", "Excel generation failed"))
 
     filename = os.path.basename(result["saved_location"])
-    await write_audit_event(
-        event_type="EXCEL_REPORT_GENERATED",
-        actor=actor_email or "HR",
-        payload={
-            "report": "skill_rack",
-            "skill": skill,
-            "min_skill_exp": min_skill_exp,
-            "employee_count": len(data),
-            "filename": filename,
-        },
-    )
     return {"status": "success", "excel_filename": filename, "count": len(data)}
 
 
@@ -452,15 +399,6 @@ async def all_employees_excel(actor_email: Optional[str] = None):
         raise HTTPException(status_code=500, detail=result.get("message", "Excel generation failed"))
 
     filename = os.path.basename(result["saved_location"])
-    await write_audit_event(
-        event_type="EXCEL_REPORT_GENERATED",
-        actor=actor_email or "HR",
-        payload={
-            "report": "full_employee_directory",
-            "employee_count": len(data),
-            "filename": filename,
-        },
-    )
     return {"status": "success", "excel_filename": filename, "count": len(data)}
 
 
@@ -481,44 +419,6 @@ async def audit_log(
         page_size=page_size,
     )
     return {"status": "success", **result}
-
-
-@router.post("/search-candidates")
-async def search_candidates(request: CandidateSearchRequest):
-    from services.agent_runner import run_agent
-
-    response = await run_agent(
-        prompt={
-            "query": request.query,
-            "employee_id": request.employee_id,
-        },
-        session_id=request.session_id,
-    )
-    reply = response.get("reply", {})
-    session_id = response.get("session_id")
-    status = reply.get("status", "error")
-
-    # Text/greeting/pending_confirmation replies — no candidate data expected
-    if status in ("text", "pending_confirmation"):
-        return {
-            "status": status,
-            "count": 0,
-            "candidates": [],
-            "message": reply.get("message"),
-            "excel_filename": None,
-            "session_id": session_id,
-        }
-
-    excel_path = reply.get("excel_path")
-    excel_filename = os.path.basename(excel_path) if excel_path else None
-    return {
-        "status": status,
-        "count": reply.get("count", 0),
-        "candidates": reply.get("candidates", []),
-        "message": reply.get("message"),
-        "excel_filename": excel_filename,
-        "session_id": session_id,
-    }
 
 
 @router.get("/download-excel")

@@ -168,6 +168,9 @@ export default function EmployeeDashboard() {
   const [editOpenEntries, setEditOpenEntries] = useState<Set<number>>(new Set())
   const [editOpenProjects, setEditOpenProjects] = useState<Set<string>>(new Set())
 
+  // Snapshot of edit values taken when a modal opens — used to detect unsaved changes
+  const editSnapshotRef = useRef<string>('')
+
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -215,48 +218,80 @@ export default function EmployeeDashboard() {
     setSaveMsg('')
     setSkillSaveMsg('')
     const r = profile?.resume
+    let snapshot: unknown = null
+
     if (m === 'summary') {
-      setEditSummary(r?.profile_summary || '')
-      setEditExperience(skillSummary?.total_exp ?? r?.total_experience ?? 0)
+      const summary = r?.profile_summary || ''
+      const experience = skillSummary?.total_exp ?? r?.total_experience ?? 0
+      setEditSummary(summary)
+      setEditExperience(experience)
+      snapshot = { summary, experience }
     }
     if (m === 'skills') {
-      setEditSkills(
-        r?.technical_skills
-          ? Object.entries(r.technical_skills).map(([cat, skills]) => ({ category: cat, skills: skills.join(', ') }))
-          : [{ category: '', skills: '' }]
-      )
+      const skills = r?.technical_skills
+        ? Object.entries(r.technical_skills).map(([cat, skills]) => ({ category: cat, skills: skills.join(', ') }))
+        : [{ category: '', skills: '' }]
+      setEditSkills(skills)
+      snapshot = skills
     }
     if (m === 'experience') {
-      setEditWorkExps(r?.work_experience ? toWorkExpEdits(r.work_experience) : [blankWorkExp()])
+      const workExps = r?.work_experience ? toWorkExpEdits(r.work_experience) : [blankWorkExp()]
+      setEditWorkExps(workExps)
       setEditOpenEntries(new Set())
       setEditOpenProjects(new Set())
+      snapshot = workExps
     }
-    if (m === 'certs') setEditCertifications(r?.certifications ?? [])
-    if (m === 'achievements') setEditAchievements(r?.achievements ?? [])
+    if (m === 'certs') {
+      const certs = r?.certifications ?? []
+      setEditCertifications(certs)
+      snapshot = certs
+    }
+    if (m === 'achievements') {
+      const achievements = r?.achievements ?? []
+      setEditAchievements(achievements)
+      snapshot = achievements
+    }
     if (m === 'education') {
-      setEditEducation(
-        r?.education?.map(e => ({
-          institution: e.institution || '',
-          stream: e.stream || '',
-          year: e.year || '',
-          cgpa: e.cgpa != null ? String(e.cgpa) : '',
-        })) ?? []
-      )
+      const education = r?.education?.map(e => ({
+        institution: e.institution || '',
+        stream: e.stream || '',
+        year: e.year || '',
+        cgpa: e.cgpa != null ? String(e.cgpa) : '',
+      })) ?? []
+      setEditEducation(education)
+      snapshot = education
     }
-    if (m === 'interests') setEditInterests(r?.interests ?? [])
+    if (m === 'interests') {
+      const interests = r?.interests ?? []
+      setEditInterests(interests)
+      snapshot = interests
+    }
     if (m === 'skillprofile') {
-      setEditDesignation(skillSummary?.current_designation || '')
-      setEditCurrentSkill(skillSummary?.current_skill || '')
-      setEditTotalExp(skillSummary?.total_exp || 0)
-      setEditSkillExp(skillSummary?.current_skill_exp || 0)
-      setEditPrimarySkill(skillSummary?.primary_skill || '')
-      setEditSecondarySkill(skillSummary?.secondary_skill || '')
-      setEditIsOnBench(skillSummary?.is_on_bench || false)
+      const designation    = skillSummary?.current_designation || ''
+      const currentSkill   = skillSummary?.current_skill || ''
+      const totalExp       = skillSummary?.total_exp || 0
+      const skillExp       = skillSummary?.current_skill_exp || 0
+      const primarySkill   = skillSummary?.primary_skill || ''
+      const secondarySkill = skillSummary?.secondary_skill || ''
+      const isOnBench      = skillSummary?.is_on_bench || false
+      setEditDesignation(designation)
+      setEditCurrentSkill(currentSkill)
+      setEditTotalExp(totalExp)
+      setEditSkillExp(skillExp)
+      setEditPrimarySkill(primarySkill)
+      setEditSecondarySkill(secondarySkill)
+      setEditIsOnBench(isOnBench)
+      snapshot = { designation, currentSkill, totalExp, skillExp, primarySkill, secondarySkill, isOnBench }
     }
+
+    editSnapshotRef.current = JSON.stringify(snapshot)
     setActiveModal(m)
   }
 
   const closeModal = () => setActiveModal(null)
+
+  // Returns true once the current edit state differs from the snapshot taken on open
+  const isDirty = (current: unknown) => JSON.stringify(current) !== editSnapshotRef.current
 
   // ── Save handlers ──────────────────────────────────────────────────────────
 
@@ -621,6 +656,7 @@ export default function EmployeeDashboard() {
         onSave={handleSaveSummary}
         saving={saving}
         saveMsg={saveMsg}
+        dirty={isDirty({ summary: editSummary, experience: editExperience })}
         summary={editSummary}
         onSummaryChange={setEditSummary}
       />
@@ -631,6 +667,7 @@ export default function EmployeeDashboard() {
         onSave={handleSaveSkills}
         saving={saving}
         saveMsg={saveMsg}
+        dirty={isDirty(editSkills)}
         editSkills={editSkills}
         onSkillsChange={setEditSkills}
       />
@@ -641,6 +678,7 @@ export default function EmployeeDashboard() {
         onSave={handleSaveExperience}
         saving={saving}
         saveMsg={saveMsg}
+        dirty={isDirty(editWorkExps)}
         editWorkExps={editWorkExps}
         openEntries={editOpenEntries}
         openProjects={editOpenProjects}
@@ -660,6 +698,7 @@ export default function EmployeeDashboard() {
         onSave={handleSaveCerts}
         saving={saving}
         saveMsg={saveMsg}
+        dirty={isDirty(editCertifications)}
         items={editCertifications}
         onItemsChange={setEditCertifications}
       />
@@ -670,6 +709,7 @@ export default function EmployeeDashboard() {
         onSave={handleSaveAchievements}
         saving={saving}
         saveMsg={saveMsg}
+        dirty={isDirty(editAchievements)}
         items={editAchievements}
         onItemsChange={setEditAchievements}
       />
@@ -680,6 +720,15 @@ export default function EmployeeDashboard() {
         onSave={handleSaveSkillProfile}
         saving={skillSaving}
         saveMsg={skillSaveMsg}
+        dirty={isDirty({
+          designation: editDesignation,
+          currentSkill: editCurrentSkill,
+          totalExp: editTotalExp,
+          skillExp: editSkillExp,
+          primarySkill: editPrimarySkill,
+          secondarySkill: editSecondarySkill,
+          isOnBench: editIsOnBench,
+        })}
         employeeId={skillSummary?.employee_id || user?.employeeId || undefined}
         name={skillSummary?.name || user?.fullName || undefined}
         email={profile?.email || user?.email || undefined}
@@ -706,6 +755,7 @@ export default function EmployeeDashboard() {
         onSave={handleSaveEducation}
         saving={saving}
         saveMsg={saveMsg}
+        dirty={isDirty(editEducation)}
         items={editEducation}
         onItemsChange={setEditEducation}
       />
@@ -716,6 +766,7 @@ export default function EmployeeDashboard() {
         onSave={handleSaveInterests}
         saving={saving}
         saveMsg={saveMsg}
+        dirty={isDirty(editInterests)}
         items={editInterests}
         onItemsChange={setEditInterests}
       />

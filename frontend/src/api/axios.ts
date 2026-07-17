@@ -1,9 +1,19 @@
 import axios from 'axios'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 })
+
+// AuthProvider registers its updateTokens callback here so this plain module
+// (outside the React tree) can keep AuthContext's accessToken state in sync
+// after a silent refresh, instead of only writing to localStorage.
+let onTokenRefreshed: ((accessToken: string) => void) | null = null
+export function setTokenRefreshedHandler(handler: (accessToken: string) => void) {
+  onTokenRefreshed = handler
+}
 
 // ── Request interceptor — attach Bearer token ─────────────────────────────────
 api.interceptors.request.use(config => {
@@ -51,11 +61,12 @@ api.interceptors.response.use(
     isRefreshing = true
     try {
       const { data } = await axios.post(
-        'http://localhost:8000/api/auth/refresh',
+        `${API_BASE_URL}/auth/refresh`,
         { refresh_token: refreshToken }
       )
       const newAccess = data.access_token
       localStorage.setItem('rs_access', newAccess)
+      onTokenRefreshed?.(newAccess)
 
       // Flush queued requests with the new token
       pendingRequests.forEach(cb => cb(newAccess))

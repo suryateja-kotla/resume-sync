@@ -36,11 +36,17 @@ export interface WorkExperienceItem {
   }
 }
 
-export interface WorkExpGroup {
+/** A single role (designation + duration) held at a company, with its projects. */
+export interface CompanyRole {
   designation: string
-  company: { name: string; description?: string }
   duration: string
   projects: WorkExperienceItem['project'][]
+}
+
+/** All roles held at one company, grouped together. */
+export interface CompanyGroup {
+  company: { name: string; description?: string }
+  roles: CompanyRole[]
 }
 
 export interface ProfileData {
@@ -97,18 +103,33 @@ export type ActiveModal =
   | 'skillprofile'
   | null
 
-export const groupWorkExperience = (items: WorkExperienceItem[]): WorkExpGroup[] => {
-  const map = new Map<string, WorkExpGroup>()
-  const order: string[] = []
+/**
+ * Groups work experience by company, then by distinct role (designation + duration)
+ * within each company. Multiple roles/stints at the same company collapse under a
+ * single company entry instead of appearing as separate companies.
+ */
+export const groupByCompany = (items: WorkExperienceItem[]): CompanyGroup[] => {
+  const companyMap = new Map<string, CompanyGroup>()
+  const companyOrder: string[] = []
+
   items.forEach(item => {
-    const key = `${item.company.name}|||${item.designation}|||${item.duration}`
-    if (!map.has(key)) {
-      order.push(key)
-      map.set(key, { designation: item.designation, company: item.company, duration: item.duration, projects: [] })
+    const companyKey = item.company.name.trim().toLowerCase()
+    if (!companyMap.has(companyKey)) {
+      companyOrder.push(companyKey)
+      companyMap.set(companyKey, { company: item.company, roles: [] })
     }
-    if (item.project) map.get(key)!.projects.push(item.project)
+    const group = companyMap.get(companyKey)!
+
+    const roleKey = `${item.designation}|||${item.duration}`
+    let role = group.roles.find(r => `${r.designation}|||${r.duration}` === roleKey)
+    if (!role) {
+      role = { designation: item.designation, duration: item.duration, projects: [] }
+      group.roles.push(role)
+    }
+    if (item.project) role.projects.push(item.project)
   })
-  return order.map(k => map.get(k)!)
+
+  return companyOrder.map(k => companyMap.get(k)!)
 }
 
 /** Count unique companies (ignores multiple roles at the same company) */
