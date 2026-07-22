@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "Resume Sync Backend"
+    app_name: str = "Sync-Folio"
     api_prefix: str = "/api/v1"
     frontend_update_url: str = "http://localhost:4200/employee-dashboard"
     backend_base_url: str = "http://localhost:8000"

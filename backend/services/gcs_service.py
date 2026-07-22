@@ -41,10 +41,20 @@ def delete_resume(blob_name: str) -> None:
 
 def get_signed_url(blob_name: str, expires_in_minutes: int = 60) -> str:
     """Short-lived signed URL so HR's Excel export can link to a private
-    resume file without the bucket ever needing to be publicly readable."""
+    resume file without the bucket ever needing to be publicly readable.
+    Requires the caller's credentials to include a private key (a service
+    account) — plain user ADC tokens can't sign. Use download_resume_bytes()
+    instead when only object read access is available."""
     blob = _get_bucket().blob(blob_name)
     return blob.generate_signed_url(
         version="v4",
         expiration=datetime.timedelta(minutes=expires_in_minutes),
         method="GET",
     )
+
+
+def download_resume_bytes(blob_name: str) -> bytes:
+    """Reads a resume blob's bytes directly — used to proxy the file through
+    our own backend for preview, since that only needs object read access
+    (not the signing-key permission generate_signed_url requires)."""
+    return _get_bucket().blob(blob_name).download_as_bytes()
