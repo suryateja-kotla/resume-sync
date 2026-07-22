@@ -1,0 +1,32 @@
+name: Sync GitHub to Azure DevOps
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Add Azure DevOps Remote
+        env:
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+          AZURE_DEVOPS_REPO: ${{ secrets.AZURE_DEVOPS_REPO }}
+        run: |
+          git remote add azure https://anything:${AZURE_DEVOPS_PAT}@${AZURE_DEVOPS_REPO#https://}
+
+      - name: Push All Branches
+        run: |
+          git push azure --mirror
