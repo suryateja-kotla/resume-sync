@@ -1,6 +1,7 @@
 import logging
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import OperationFailure
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -10,6 +11,34 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = os.getenv("MONGO_DB_NAME", "resume_sync_db")
 logger = logging.getLogger(__name__)
 
+# Some MongoDB-compatible backends (e.g. Firestore) require a separate,
+# more privileged credential to manage indexes than to read/write data —
+# and issuing index commands the credential can't run has been observed to
+# destabilize the connection (AutoReconnect) rather than just returning a
+# clean permission error. Set to "false" to skip all index management at
+# startup entirely; an admin is expected to pre-create the needed indexes
+# out of band in that case. Defaults to "true" (normal behavior, e.g. Atlas).
+MANAGE_INDEXES = os.getenv("MANAGE_INDEXES", "true").lower() == "true"
+
+
+async def _ensure_index(coro, description: str):
+    """Runs an index create/drop call, tolerating IAM permission errors and
+    "already in the desired state" errors — see MANAGE_INDEXES above for
+    why this exists. The app should still start rather than crash on a
+    missing grant or a drop-index-that-doesn't-exist-yet."""
+    if not MANAGE_INDEXES:
+        logger.info(f"Skipping index op ({description}): MANAGE_INDEXES=false")
+        return
+    try:
+        await coro
+    except OperationFailure as e:
+        if e.code == 13:  # PermissionDenied
+            logger.warning(f"Skipping index op ({description}): permission denied — {e}")
+        elif e.code in (26, 27, 4):  # NamespaceNotFound / IndexNotFound / NotFound
+            pass  # nothing to drop — fine
+        else:
+            logger.warning(f"Skipping index op ({description}): {e}")
+
 
 async def seed_database():
     client = AsyncIOMotorClient(MONGO_URI)
@@ -17,328 +46,47 @@ async def seed_database():
 
     existing_collections = await db.list_collection_names()
 
-    audit_data_validator = {
-        "$jsonSchema": {
-            "bsonType": "object",
-            "required": ["event_type", "actor", "timestamp"],
-            "properties": {
-                "_id": {"bsonType": "objectId"},
-                "event_type": {
-                    "enum": [
-                        "LOGIN",
-                        "LOGOUT",
-                        "FAILED_LOGIN",
-                        "PASSWORD_CHANGED",
-                        "PASSWORD_RESET_REQUESTED",
-                        "PASSWORD_RESET_COMPLETED",
-                        "RESUME_UPLOAD",
-                        "PROFILE_UPDATED",
-                        "SKILL_PROFILE_UPDATED",
-                        "RESUME_REGENERATED",
-                        "MONTHLY_UPDATE_SUBMITTED",
-                        "NEW_EMPLOYEE_PROVISIONED",
-                        "INVITE_SENT",
-                        "EXCEL_REPORT_GENERATED",
-                        "EMPLOYEE_DELETED",
-                    ]
-                },
-                "actor": {
-                    "bsonType": "string",
-                    "description": "employee_id of who performed the action, or 'SYSTEM'",
-                },
-                "employee_id": {
-                    "bsonType": ["string", "null"],
-                    "description": "employee_id the event is about (may differ from actor, e.g. HR sending an invite)",
-                },
-                "timestamp": {"bsonType": "date"},
-                "payload": {
-                    "bsonType": ["object", "null"],
-                    "description": "Event-specific context, e.g. before/after diff for edits",
-                },
-            },
-        }
-    }
+    # Schema shape is enforced at the API boundary via Pydantic models
+    # (schemas.py) rather than DB-level $jsonSchema validators — Firestore's
+    # MongoDB-compatibility layer doesn't support the `validator` option on
+    # createCollection/collMod at all (errors with "Unsupported fields in
+    # createCollection request: [validator]"), so collections are created
+    # plain here and indexes still apply for lookup/uniqueness.
 
     _AUDIT_TTL_DAYS = int(os.getenv("AUDIT_TTL_DAYS", "15"))
     _AUDIT_TTL_SECONDS = _AUDIT_TTL_DAYS * 24 * 3600
 
     if "audit_data" not in existing_collections:
-        await db.create_collection("audit_data", validator=audit_data_validator)
-        await db.audit_data.create_index(
-            "timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS
+        await db.create_collection("audit_data")
+        await _ensure_index(
+            db.audit_data.create_index("timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS),
+            "audit_data.timestamp TTL",
         )
-        await db.audit_data.create_index("event_type")
-        await db.audit_data.create_index("actor")
+        await _ensure_index(db.audit_data.create_index("event_type"), "audit_data.event_type")
+        await _ensure_index(db.audit_data.create_index("actor"), "audit_data.actor")
     else:
-        await db.command("collMod", "audit_data", validator=audit_data_validator)
         # Drop existing TTL index if present, then recreate with current TTL value
-        try:
-            await db.command("dropIndexes", "audit_data", index="timestamp_1")
-        except Exception:
-            pass  # index didn't exist yet — that's fine
-        await db.audit_data.create_index(
-            "timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS
+        await _ensure_index(
+            db.command("dropIndexes", "audit_data", index="timestamp_1"),
+            "audit_data.timestamp drop",
+        )
+        await _ensure_index(
+            db.audit_data.create_index("timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS),
+            "audit_data.timestamp TTL",
         )
 
     if "user_accounts" not in existing_collections:
-        await db.create_collection(
-            "user_accounts",
-            validator={
-                "$jsonSchema": {
-                    "bsonType": "object",
-                    "required": ["employeeId", "email", "status", "role"],
-                    "properties": {
-                        "_id":                  {"bsonType": "objectId"},
-                        "employeeId":           {"bsonType": "string"},
-                        "email": {
-                            "bsonType": "string",
-                            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-                        },
-                        "status":               {"enum": ["Active", "Inactive", "On Leave"]},
-                        "role":                 {"enum": ["HR", "EMPLOYEE"]},
-                        "password_hash":        {"bsonType": ["string", "null"]},
-                        "must_change_password": {"bsonType": ["bool", "null"]},
-                        "refresh_token_hash":   {"bsonType": ["string", "null"]},
-                        "reset_token_hash":     {"bsonType": ["string", "null"]},
-                        "reset_token_expires":  {"bsonType": ["date", "null"]},
-                        "lastLoginAt":          {"bsonType": ["date", "null"]},
-                    },
-                }
-            },
-        )
-
-        await db.user_accounts.create_index("employeeId", unique=True)
-        await db.user_accounts.create_index("email",      unique=True)
+        await db.create_collection("user_accounts")
+        await _ensure_index(db.user_accounts.create_index("employeeId", unique=True), "user_accounts.employeeId")
+        await _ensure_index(db.user_accounts.create_index("email", unique=True), "user_accounts.email")
 
     if "employee_resume_data" not in existing_collections:
-        await db.create_collection(
-            "employee_resume_data",
-            validator={
-                "$jsonSchema": {
-                    "bsonType": "object",
-                    "required": [
-                        "personal_info",
-                        "profile_summary",
-                        "technical_skills",
-                        "work_experience",
-                        "education",
-                    ],
-                    "properties": {
-                        "employee_id": {"bsonType": "string"},
-                        "total_experience": {
-                            "bsonType": ["double", "int", "decimal"],
-                            "description": "Total years of experience",
-                        },
-                        "search_tags": {
-                            "bsonType": "array",
-                            "items": {"bsonType": "string"},
-                        },
-                        "personal_info": {
-                            "bsonType": "object",
-                            "required": ["full_name"],
-                            "properties": {"full_name": {"bsonType": "string"}},
-                        },
-                        "profile_summary": {"bsonType": "string"},
-                        "technical_skills": {
-                            "bsonType": "object",
-                            "additionalProperties": {
-                                "bsonType": "array",
-                                "items": {"bsonType": "string"},
-                            },
-                        },
-                        "work_experience": {
-                            "bsonType": "array",
-                            "items": {
-                                "bsonType": "object",
-                                "required": [
-                                    "company",
-                                    "designation",
-                                    "duration",
-                                    "project",
-                                ],
-                                "properties": {
-                                    "company": {
-                                        "bsonType": "object",
-                                        "required": ["name"],
-                                        "properties": {
-                                            "name": {"bsonType": "string"},
-                                            "description": {
-                                                "bsonType": ["string", "null"]
-                                            },
-                                        },
-                                    },
-                                    "designation": {"bsonType": "string"},
-                                    "duration": {"bsonType": "string"},
-                                    "project": {
-                                        "bsonType": "object",
-                                        "required": [
-                                            "name",
-                                            "client",
-                                            "project_description",
-                                        ],
-                                        "properties": {
-                                            "name": {"bsonType": "string"},
-                                            "client": {"bsonType": "string"},
-                                            "role": {"bsonType": ["string", "null"]},
-                                            "environment": {
-                                                "bsonType": "array",
-                                                "items": {"bsonType": "string"},
-                                            },
-                                            "project_description": {
-                                                "bsonType": ["string", "null"]
-                                            },
-                                            "responsibilities": {
-                                                "bsonType": "array",
-                                                "items": {"bsonType": "string"},
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                        "education": {
-                            "bsonType": "array",
-                            "items": {
-                                "bsonType": "object",
-                                "required": ["institution", "stream", "cgpa"],
-                                "properties": {
-                                    "year": {"bsonType": ["string", "null"]},
-                                    "institution": {"bsonType": "string"},
-                                    "stream": {"bsonType": "string"},
-                                    "cgpa": {"bsonType": ["double", "int", "decimal"]},
-                                },
-                            },
-                        },
-                        "certifications": {
-                            "bsonType": "array",
-                            "items": {"bsonType": "string"},
-                        },
-                        "achievements": {
-                            "bsonType": "array",
-                            "items": {"bsonType": "string"},
-                        },
-                        "interests": {
-                            "bsonType": "array",
-                            "items": {"bsonType": "string"},
-                        },
-                    },
-                }
-            },
-        )
-
-        await db.employee_resume_data.create_index("employee_id")
-        await db.employee_resume_data.create_index("search_tags")
-    else:
-        # Keep total_experience validator in sync — was int, now accepts double.
-        await db.command(
-            "collMod",
-            "employee_resume_data",
-            validator={
-                "$jsonSchema": {
-                    "bsonType": "object",
-                    "required": [
-                        "personal_info",
-                        "profile_summary",
-                        "technical_skills",
-                        "work_experience",
-                        "education",
-                    ],
-                    "properties": {
-                        "employee_id": {"bsonType": "string"},
-                        "total_experience": {
-                            "bsonType": ["double", "int", "decimal"],
-                            "description": "Total years of experience",
-                        },
-                        "search_tags": {
-                            "bsonType": "array",
-                            "items": {"bsonType": "string"},
-                        },
-                        "personal_info": {
-                            "bsonType": "object",
-                            "required": ["full_name"],
-                            "properties": {"full_name": {"bsonType": "string"}},
-                        },
-                        "profile_summary": {"bsonType": "string"},
-                        "technical_skills": {
-                            "bsonType": "object",
-                            "additionalProperties": {
-                                "bsonType": "array",
-                                "items": {"bsonType": "string"},
-                            },
-                        },
-                        "work_experience": {
-                            "bsonType": "array",
-                            "items": {
-                                "bsonType": "object",
-                                "required": ["company", "designation", "duration", "project"],
-                                "properties": {
-                                    "company": {
-                                        "bsonType": "object",
-                                        "required": ["name"],
-                                        "properties": {
-                                            "name": {"bsonType": "string"},
-                                            "description": {"bsonType": ["string", "null"]},
-                                        },
-                                    },
-                                    "designation": {"bsonType": "string"},
-                                    "duration": {"bsonType": "string"},
-                                    "project": {
-                                        "bsonType": "object",
-                                        "required": ["name", "client", "project_description"],
-                                        "properties": {
-                                            "name": {"bsonType": "string"},
-                                            "client": {"bsonType": "string"},
-                                            "role": {"bsonType": ["string", "null"]},
-                                            "environment": {
-                                                "bsonType": "array",
-                                                "items": {"bsonType": "string"},
-                                            },
-                                            "project_description": {"bsonType": "string"},
-                                            "responsibilities": {
-                                                "bsonType": "array",
-                                                "items": {"bsonType": "string"},
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                        "education": {
-                            "bsonType": "array",
-                            "items": {
-                                "bsonType": "object",
-                                "required": ["institution", "stream", "cgpa"],
-                                "properties": {
-                                    "year": {"bsonType": ["string", "null"]},
-                                    "institution": {"bsonType": "string"},
-                                    "stream": {"bsonType": "string"},
-                                    "cgpa": {"bsonType": ["double", "int", "decimal"]},
-                                },
-                            },
-                        },
-                        "certifications": {"bsonType": "array", "items": {"bsonType": "string"}},
-                        "achievements": {"bsonType": "array", "items": {"bsonType": "string"}},
-                        "interests": {"bsonType": "array", "items": {"bsonType": "string"}},
-                    },
-                }
-            },
-        )
+        await db.create_collection("employee_resume_data")
+        await _ensure_index(db.employee_resume_data.create_index("employee_id"), "employee_resume_data.employee_id")
+        await _ensure_index(db.employee_resume_data.create_index("search_tags"), "employee_resume_data.search_tags")
 
     if "resume_store" not in existing_collections:
-        await db.create_collection(
-            "resume_store",
-            validator={
-                "$jsonSchema": {
-                    "bsonType": "object",
-                    "required": ["employee_id", "resume_path", "last_updated_at"],
-                    "properties": {
-                        "employee_id": {"bsonType": "string"},
-                        "resume_path": {"bsonType": "string"},
-                        "last_updated_at": {"bsonType": "date"},
-                    },
-                }
-            },
-        )
+        await db.create_collection("resume_store")
 
     logger.info("Database and collections are set up successfully.")
 
@@ -352,12 +100,9 @@ async def seed_database():
     ]:
         col = db[col_name]
         index_name = f"{field}_1"
-        try:
-            await col.drop_index(index_name)
-        except Exception:
-            pass  # index didn't exist — fine
-        await col.create_index(field, unique=True, background=True)
-    logger.info("Unique indexes ensured on all collections.")
+        await _ensure_index(col.drop_index(index_name), f"{col_name}.{field} drop")
+        await _ensure_index(col.create_index(field, unique=True, background=True), f"{col_name}.{field} unique")
+    logger.info("Unique indexes ensured on all collections (where permitted).")
 
     # Seed HR user account only if not already present
     hr_exists = await db.user_accounts.find_one({"employeeId": "HR001"})
