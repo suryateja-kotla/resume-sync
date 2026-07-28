@@ -1,0 +1,100 @@
+trigger:
+  branches:
+    include:
+      - resume-sync/surya
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: gcp_deploy_secrets
+  - name: GCP_PROJECT
+    value: 'sync-folio'
+  - name: GCP_REGION
+    value: 'us-central1'
+  - name: AR_REPO
+    value: 'us-central1-docker.pkg.dev/sync-folio/sync-folio'
+  - name: BACKEND_URL
+    value: 'https://sync-folio-backend-327366424759.us-central1.run.app'
+  - name: FRONTEND_URL
+    value: 'https://sync-folio-327366424759.us-central1.run.app'
+  - name: IMAGE_TAG
+    value: '$(Build.BuildId)'
+
+steps:
+  - task: Bash@3
+    displayName: 'Write GCP service account key to file'
+    inputs:
+      targetType: 'inline'
+      script: |
+        echo "$GCP_SA_KEY" > $(Agent.TempDirectory)/gcp-key.json
+    env:
+      GCP_SA_KEY: $(GCP_SA_KEY)
+
+  - task: Bash@3
+    displayName: 'Install gcloud CLI'
+    inputs:
+      targetType: 'inline'
+      script: |
+        curl -sSL https://sdk.cloud.google.com | bash -s -- --disable-prompts > /dev/null
+        echo "##vso[task.prependpath]$HOME/google-cloud-sdk/bin"
+
+  - task: Bash@3
+    displayName: 'Authenticate to GCP'
+    inputs:
+      targetType: 'inline'
+      script: |
+        gcloud auth activate-service-account --key-file=$(Agent.TempDirectory)/gcp-key.json
+        gcloud config set project $(GCP_PROJECT)
+        gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
+
+  - task: Bash@3
+    displayName: 'Build and push backend image'
+    inputs:
+      targetType: 'inline'
+      script: |
+        docker build -t $(AR_REPO)/backend:$(IMAGE_TAG) -t $(AR_REPO)/backend:latest ./backend
+        docker push $(AR_REPO)/backend:$(IMAGE_TAG)
+        docker push $(AR_REPO)/backend:latest
+
+  - task: Bash@3
+    displayName: 'Deploy backend to Cloud Run'
+    inputs:
+      targetType: 'inline'
+      script: |
+        gcloud run deploy sync-folio-backend \
+          --image=$(AR_REPO)/backend:$(IMAGE_TAG) \
+          --region=$(GCP_REGION) \
+          --service-account=sync-folio-backend@$(GCP_PROJECT).iam.gserviceaccount.com \
+          --quiet
+
+  - task: Bash@3
+    displayName: 'Build and push frontend image'
+    inputs:
+      targetType: 'inline'
+      script: |
+        docker build \
+          --build-arg VITE_API_URL=$(BACKEND_URL)/api \
+          -t $(AR_REPO)/frontend:$(IMAGE_TAG) \
+          -t $(AR_REPO)/frontend:latest \
+          ./frontend
+        docker push $(AR_REPO)/frontend:$(IMAGE_TAG)
+        docker push $(AR_REPO)/frontend:latest
+
+  - task: Bash@3
+    displayName: 'Deploy frontend to Cloud Run'
+    inputs:
+      targetType: 'inline'
+      script: |
+        gcloud run deploy sync-folio \
+          --image=$(AR_REPO)/frontend:$(IMAGE_TAG) \
+          --region=$(GCP_REGION) \
+          --quiet
+
+  - task: Bash@3
+    displayName: 'Clean up service account key'
+    condition: always()
+    inputs:
+      targetType: 'inline'
+      script: |
+        rm -f $(Agent.TempDirectory)/gcp-key.json
