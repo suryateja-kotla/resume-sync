@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Download, Filter, Sparkles, ArrowLeft, History } from 'lucide-react'
-import api from '../../api/axios'
+import api, { API_BASE_URL } from '../../api/axios'
 import { SkillRack, SkillEmployee, getSkillBadgeClass } from '../../types/hr'
 import { getSkillMeta } from './skillMeta'
 import SkillChips from './SkillChips'
@@ -85,7 +85,7 @@ export default function SkillDashboard({ actorEmail }: Props) {
       if (actorEmail) params.actor_email = actorEmail
       const { data } = await api.get('/hr/skill-employees-excel', { params })
       if (data.status === 'success' && data.excel_filename) {
-        window.open(`http://localhost:8000/api/download-excel?filename=${encodeURIComponent(data.excel_filename)}`, '_blank')
+        window.open(`${API_BASE_URL}/download-excel?filename=${encodeURIComponent(data.excel_filename)}`, '_blank')
       }
     } catch { /* ignore */ }
     finally { setExcelGenerating(false) }

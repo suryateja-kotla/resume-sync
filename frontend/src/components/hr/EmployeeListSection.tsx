@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, Download, Sparkles, CalendarCheck } from 'lucide-react'
-import api from '../../api/axios'
+import api, { API_BASE_URL } from '../../api/axios'
 import { SkillSummaryRow, MonthlyResponse, MONTHLY_RESPONSE_BADGE, getSkillBadgeClass } from '../../types/hr'
 
 interface Props {
@@ -40,7 +40,7 @@ export default function EmployeeListSection({ actorEmail }: Props) {
         params: actorEmail ? { actor_email: actorEmail } : {},
       })
       if (data.status === 'success' && data.excel_filename) {
-        window.open(`http://localhost:8000/api/download-excel?filename=${encodeURIComponent(data.excel_filename)}`, '_blank')
+        window.open(`${API_BASE_URL}/download-excel?filename=${encodeURIComponent(data.excel_filename)}`, '_blank')
       }
     } catch { /* ignore */ }
     finally { setExcelGenerating(false) }
