@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # clean permission error. Set to "false" to skip all index management at
 # startup entirely; an admin is expected to pre-create the needed indexes
 # out of band in that case. Defaults to "true" (normal behavior, e.g. Atlas).
-MANAGE_INDEXES = os.getenv("MANAGE_INDEXES", "true").lower() == "true"
+MANAGE_INDEXES = os.getenv("MANAGE_INDEXES", "false").lower() == "false"
 
 
 async def _ensure_index(coro, description: str):
@@ -65,15 +65,38 @@ async def seed_database():
         await _ensure_index(db.audit_data.create_index("event_type"), "audit_data.event_type")
         await _ensure_index(db.audit_data.create_index("actor"), "audit_data.actor")
     else:
-        # Drop existing TTL index if present, then recreate with current TTL value
-        await _ensure_index(
-            db.command("dropIndexes", "audit_data", index="timestamp_1"),
-            "audit_data.timestamp drop",
+        # Firestore's Mongo-compat layer supports neither collMod on
+        # expireAfterSeconds ("Unimplemented") nor an in-place TTL rename
+        # ("Cannot modify TTL name") — its own error message says the only
+        # path is delete-then-recreate, and index deletion there is async, so
+        # the create can race a still-in-progress delete ("being deleted,
+        # please try again later") and needs a restart to catch up. Only
+        # kick off drop+recreate when the TTL actually differs from
+        # AUDIT_TTL_DAYS, so a matching value never touches the index.
+        #
+        # Firestore also names this index e.g. "audit_data_timestamp_ttl"
+        # rather than Mongo's usual auto-generated "timestamp_1", so the
+        # existing index must be found by its key (timestamp), not by name.
+        existing_indexes = await db.audit_data.index_information()
+        timestamp_index = next(
+            (
+                (name, spec)
+                for name, spec in existing_indexes.items()
+                if spec.get("key") == [("timestamp", 1)]
+            ),
+            None,
         )
-        await _ensure_index(
-            db.audit_data.create_index("timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS),
-            "audit_data.timestamp TTL",
-        )
+        current_ttl = timestamp_index[1].get("expireAfterSeconds") if timestamp_index else None
+        if current_ttl != _AUDIT_TTL_SECONDS:
+            if timestamp_index:
+                await _ensure_index(
+                    db.command("dropIndexes", "audit_data", index=timestamp_index[0]),
+                    "audit_data.timestamp drop",
+                )
+            await _ensure_index(
+                db.audit_data.create_index("timestamp", expireAfterSeconds=_AUDIT_TTL_SECONDS),
+                "audit_data.timestamp TTL",
+            )
 
     if "user_accounts" not in existing_collections:
         await db.create_collection("user_accounts")
@@ -90,7 +113,16 @@ async def seed_database():
 
     logger.info("Database and collections are set up successfully.")
 
-    # Unique indexes — drop existing non-unique versions first, then recreate
+    # Unique indexes. Several of these were created by hand through the
+    # Firestore console (e.g. "user_accounts_email_uniques",
+    # "employee_skill_summary_employee_id_unique") rather than by this
+    # script, so they don't use Mongo's auto-generated "<field>_1" name this
+    # code used to assume — meaning the old drop-by-guessed-name step never
+    # found anything to drop, and create_index then tried to add a *second*
+    # unique index on a field that already had one under the console's name,
+    # which Firestore correctly refused every single restart. Look up each
+    # index by its actual key pattern instead of a guessed name, and only
+    # create one when no unique index on that field exists yet.
     for col_name, field in [
         ("user_accounts", "employeeId"),
         ("user_accounts", "email"),
@@ -99,9 +131,16 @@ async def seed_database():
         ("resume_store", "employee_id"),
     ]:
         col = db[col_name]
-        index_name = f"{field}_1"
-        await _ensure_index(col.drop_index(index_name), f"{col_name}.{field} drop")
-        await _ensure_index(col.create_index(field, unique=True, background=True), f"{col_name}.{field} unique")
+        existing_indexes = await col.index_information()
+        has_unique_index = any(
+            spec.get("key") == [(field, 1)] and spec.get("unique")
+            for spec in existing_indexes.values()
+        )
+        if not has_unique_index:
+            await _ensure_index(
+                col.create_index(field, unique=True, background=True),
+                f"{col_name}.{field} unique",
+            )
     logger.info("Unique indexes ensured on all collections (where permitted).")
 
     # Seed HR user account only if not already present

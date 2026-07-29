@@ -219,7 +219,6 @@ _normalizer = ResumeNormalizer()
 _TEMPLATE_PATH = os.getenv(
     "RESUME_TEMPLATE_PATH", "templates/sample_resume_template.docx"
 )
-_OUTPUT_DIR = os.getenv("RESUME_OUTPUT_DIR", "output")
 
 
 def _parse_gemini_json(raw: str) -> dict:
@@ -296,14 +295,22 @@ def _clean_extracted(extracted: dict, employee_id: str) -> dict:
 
     extracted = _strip_nulls(extracted)
 
-    # Sanitise education.cgpa — Gemini sometimes omits it or sends empty string
+    # Sanitise education.cgpa/percentage — Gemini sometimes omits them, sends
+    # empty strings, or (for percentage) includes a trailing "%" sign.
+    def _to_float_or_none(raw):
+        if raw in ("", None):
+            return None
+        if isinstance(raw, str):
+            raw = raw.strip().rstrip("%")
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            return None
+
     for edu in extracted.get("education", []):
         if isinstance(edu, dict):
-            raw_cgpa = edu.get("cgpa", 0.0)
-            try:
-                edu["cgpa"] = float(raw_cgpa) if raw_cgpa not in ("", None) else 0.0
-            except (ValueError, TypeError):
-                edu["cgpa"] = 0.0
+            edu["cgpa"] = _to_float_or_none(edu.get("cgpa"))
+            edu["percentage"] = _to_float_or_none(edu.get("percentage"))
 
     # Ensure project_description is always present
     for we in extracted.get("work_experience", []):
@@ -485,12 +492,11 @@ async def generate_resume_docx(employee_id: str) -> dict:
             except Exception:
                 pass  # Non-fatal — new file will still be saved correctly
 
-        # Generate DOCX to a local temp path (always overwrites same filename
-        # if designation unchanged), then upload it to GCS.
+        # Generate DOCX to a private OS temp file, then upload it to GCS
+        # under new_filename (computed above) and discard the temp file.
         gen_result = _docx_tool.generate_resume(
             template_path=_TEMPLATE_PATH,
             normalized_data=norm_result["data"],
-            output_dir=_OUTPUT_DIR,
         )
 
         if gen_result["status"] == "error":

@@ -1,6 +1,7 @@
 import base64
 import io
 import os
+import tempfile
 from copy import deepcopy
 
 from docx import Document
@@ -414,13 +415,14 @@ class DocxTool:
         self,
         template_path: str,
         normalized_data: dict,
-        output_dir: str = "output",
     ) -> dict:
         """
-        Build a .docx resume from the template and normalized_data dict.
-        Always writes to the same filename so repeated updates overwrite the
-        previous file instead of accumulating timestamped copies.
-        Filename format: {FullName}_{PrimarySkill}_SailsResume.docx
+        Build a .docx resume from the template and normalized_data dict,
+        writing it to a private OS temp file — the caller uploads this to
+        GCS and deletes it immediately after, so it never needs a stable
+        filename or a project-local directory. Callers that need the
+        "real" filename (e.g. for the GCS blob name) should compute it
+        themselves via _build_output_filename, independent of this path.
         """
         try:
             if not os.path.exists(template_path):
@@ -472,13 +474,14 @@ class DocxTool:
                 "{{ACTIVITY}}",
             )
 
-            # 6. Save — always same filename, overwrites previous version
-            os.makedirs(output_dir, exist_ok=True)
-            filename = self._build_output_filename(normalized_data)
-            output_path = os.path.abspath(os.path.join(output_dir, filename))
-            doc.save(output_path)
+            # 6. Save to a private OS temp file — the caller uploads this to
+            # GCS under the "real" filename and deletes it right after, so
+            # a unique temp name (not a stable one) is all that's needed here.
+            fd, temp_path = tempfile.mkstemp(suffix=".docx")
+            os.close(fd)
+            doc.save(temp_path)
 
-            return {"status": "success", "data": output_path}
+            return {"status": "success", "data": temp_path}
 
         except Exception as e:
             return {"status": "error", "message": str(e)}

@@ -1,0 +1,10 @@
+/* The generated .docx template uses fonts (e.g. Calibri) that are usually
+   embedded in the generated .docx (only referenced by name) and not present
+   on most non-Windows/non-Office machines. docx-preview renders text with
+   whatever font is actually installed, so without a web-safe substitute the
+   preview falls back to a generic sans-serif and no longer matches the
+   real document's line-wrapping/spacing. Carlito is metric-compatible with
+   Calibri, so loading it here keeps the in-browser preview close to Word's
+   actual layout. */
+@import '@fontsource/carlito/400.css';
+@import '@fontsource/carlito/700.css';

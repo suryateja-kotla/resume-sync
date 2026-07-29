@@ -57,7 +57,11 @@ class ResumeNormalizer:
                     "YEAR": edu.year or "",
                     "INSTITUTE": edu.institution,
                     "STREAM": edu.stream,
-                    "PERCENTAGE": str(edu.cgpa),
+                    "PERCENTAGE": (
+                        f"{edu.percentage}%" if edu.percentage is not None
+                        else str(edu.cgpa) if edu.cgpa is not None
+                        else ""
+                    ),
                 }
                 for idx, edu in enumerate(payload.education)
             ]

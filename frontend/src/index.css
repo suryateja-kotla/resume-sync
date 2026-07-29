@@ -12,3 +12,10 @@ body {
     Ubuntu, Cantarell, sans-serif;
   line-height: 1.6;
 }
+
+/* Tailwind Preflight's `img { max-width: 100% }` resolves against docx-preview's
+   zero-width wrapNone anchor wrappers (used for floating images like headers/logos),
+   collapsing them to 0px despite their own explicit inline width/height. */
+.docx-preview-container img {
+  max-width: none;
+}

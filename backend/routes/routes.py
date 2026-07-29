@@ -2,14 +2,14 @@ import os
 import tempfile
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Response, BackgroundTasks
 from fastapi.responses import FileResponse
 from schemas.schemas import EmployeePayload
 import logging
 from constants.skill_categories import SKILL_CATEGORIES
 from tools.resume_tool import generate_resume_docx
 from tools.excel_tools import create_talent_excel
-from services.gcs_service import delete_resume
+from services.gcs_service import delete_resume, download_resume_bytes
 from services.db_service import (
     get_audit_log,
     get_all_skill_summary_employees,
@@ -62,6 +62,61 @@ async def get_employee_profile(email: str):
             "hasResume": resume is not None,
         },
     }
+
+
+@router.get("/employee-profile/resume-preview-file")
+async def get_resume_preview_file(email: str):
+    """Streams the employee's own generated resume DOCX bytes, for the
+    frontend to render client-side (docx-preview). Proxying through the
+    backend — rather than returning a signed GCS URL — only needs plain
+    object-read access, not the signing-key permission a signed URL requires."""
+    emp = await get_employee_by_email(email)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    blob_name = await get_resume_path(emp.get("employeeId", ""))
+    if not blob_name:
+        raise HTTPException(status_code=404, detail="No resume on file")
+
+    try:
+        content = download_resume_bytes(blob_name)
+    except Exception as e:
+        logger.error(f"Failed to download resume for preview ({email}): {e}")
+        raise HTTPException(status_code=502, detail="Could not load resume document")
+
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
+@router.get("/hr/resume-file/{employee_id}")
+async def get_resume_file_for_hr(employee_id: str):
+    """Streams a resume DOCX by employee_id, for HR's Excel export
+    hyperlinks — same proxy-through-backend approach as
+    resume-preview-file, since we don't have a signing-capable credential
+    for GCS signed URLs. Records with a pre-GCS-migration local file path
+    (not a GCS blob name) can't be served this way; those return 404 with a
+    distinct message so the Excel link reads as "not available" rather than
+    silently erroring."""
+    blob_name = await get_resume_path(employee_id)
+    if not blob_name:
+        raise HTTPException(status_code=404, detail="No resume on file")
+
+    if os.path.isabs(blob_name) or ":\\" in blob_name:
+        raise HTTPException(status_code=404, detail="Resume predates GCS migration — ask employee to re-upload")
+
+    try:
+        content = download_resume_bytes(blob_name)
+    except Exception as e:
+        logger.error(f"Failed to download resume for HR export ({employee_id}): {e}")
+        raise HTTPException(status_code=502, detail="Could not load resume document")
+
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{os.path.basename(blob_name)}"'},
+    )
 
 
 @router.put("/employee-profile")
@@ -422,16 +477,21 @@ async def audit_log(
 
 
 @router.get("/download-excel")
-async def download_excel(filename: str):
+async def download_excel(filename: str, background_tasks: BackgroundTasks):
     output_dir = os.getenv("EXCEL_OUTPUT_DIR", "output_excels")
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(output_dir, safe_filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
+    # Delete the server's copy once it's fully streamed to the client —
+    # this file only ever needs to exist long enough to reach HR's machine,
+    # not persist on the backend afterward.
+    background_tasks.add_task(os.remove, file_path)
     return FileResponse(
         file_path,
         filename=safe_filename,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        background=background_tasks,
     )
 
 

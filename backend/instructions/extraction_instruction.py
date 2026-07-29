@@ -28,7 +28,7 @@ Return ONLY a JSON object (no markdown, no code fences, no explanation) with thi
       }
     }
   ],
-  "education": [{ "year": "...", "institution": "...", "stream": "...", "cgpa": 0.0 }],
+  "education": [{ "year": "...", "institution": "...", "stream": "...", "cgpa": null, "percentage": null }],
   "certifications": ["..."],
   "achievements": ["..."],
   "interests": ["..."]
@@ -46,7 +46,7 @@ Critical rules:
   - Extract any project description paragraph (what the project/product does) into project.project_description.
   - Extract the tech stack / technologies mentioned under each role into project.environment as an array.
 - total_experience must be a number (float allowed, e.g. 1.5 for 18 months).
-- cgpa must be a float.
+- For each education entry, extract EITHER cgpa OR percentage — whichever the resume actually states, as a plain number (no "%" sign, no "/10"). If the resume shows a percentage (e.g. "78%", "69%"), put that number in "percentage" and leave "cgpa" null. If it shows a GPA/CGPA (e.g. "9.05", "8.5/10"), put that number in "cgpa" and leave "percentage" null. Never convert one to the other. If neither is stated for an entry, leave both null.
 - All arrays must be arrays even if empty: [].
 - Sort work_experience with the most recent role first (ongoing/Till Date roles come first).
 - For achievements: copy every item from sections labelled "Skills & Abilities/Achievements", "Achievements", or similar headings EXACTLY as written — word for word, including all impact lines, metrics, and descriptions. Do NOT summarize, paraphrase, condense, or reword anything. Each bullet or line should be one string in the array. IMPORTANT: "Skills & Abilities/Achievements" is an achievements section, NOT a technical skills section — never put its contents into technical_skills.
