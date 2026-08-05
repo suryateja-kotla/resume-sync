@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
-import api, { redirectToLogin } from '../api/axios'
+import api, { redirectToLogin, setCsrfToken } from '../api/axios'
 import { invalidate } from '../hooks/useCachedResource'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -40,12 +40,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const { data } = await api.get('/auth/me')
-      setUser(data.status === 'success' ? data.user : null)
+      const signedIn = data.status === 'success'
+      setUser(signedIn ? data.user : null)
+      // The CSRF token rides inside this same response body — see axios.ts
+      // for why it can no longer travel as a cookie. Every unsafe request
+      // (save, upload, delete, logout) depends on this being set correctly.
+      setCsrfToken(signedIn ? data.user.csrf_token : null)
     } catch {
       // 401 here is normal — it just means nobody is signed in. The axios
       // interceptor deliberately skips redirecting on /auth/me so that the
       // login page itself does not loop.
       setUser(null)
+      setCsrfToken(null)
     } finally {
       setLoading(false)
     }
@@ -65,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // employee lists from cache before the refetch landed.
     invalidate()
     setUser(null)
+    setCsrfToken(null)
     redirectToLogin()
   }, [])
 

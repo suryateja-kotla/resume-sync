@@ -4,6 +4,7 @@ import ProtectedRoute, { homeFor } from './components/ProtectedRoute'
 import Login from './pages/Login'
 import HRDashboard from './pages/HRDashboard'
 import EmployeeDashboard from './pages/EmployeeDashboard'
+import HrResumeView from './pages/HrResumeView'
 
 /** Sends each persona to their own dashboard. Used for "/" and for any
  *  unmatched path, so nobody lands on a route their role cannot render. */
@@ -39,6 +40,17 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <EmployeeDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Target of the Excel export's "Open Resume" hyperlinks — renders
+              the docx in-browser instead of forcing a file download. */}
+          <Route
+            path="/hr/resume/:employeeId"
+            element={
+              <ProtectedRoute requires="HR">
+                <HrResumeView />
               </ProtectedRoute>
             }
           />

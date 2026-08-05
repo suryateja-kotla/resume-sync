@@ -106,6 +106,9 @@ async def get_current_user(request: Request) -> CurrentUser:
         email=session["email"],
         display_name=session.get("display_name", ""),
         entra_object_id=session.get("entra_object_id"),
+        # Carried through so /auth/me can hand it back to the frontend — see
+        # session_service's CSRF note for why this replaced a shared cookie.
+        csrf_token=session.get("csrf_token"),
     )
 
 
@@ -155,10 +158,16 @@ def assert_owns_record(current_user: CurrentUser, employee_id: str) -> None:
 
 
 def public_user(current_user: CurrentUser) -> dict[str, Any]:
-    """Shape returned by /auth/me — no session internals leak to the client."""
+    """Shape returned by /auth/me — no session internals leak to the client,
+    except csrf_token, which is deliberately handed over here: this is the
+    one JSON response the frontend can read that proves it holds a valid
+    session, which is exactly the property the CSRF token needs to piggyback
+    on. See session_service's module docstring for the full reasoning.
+    """
     return {
         "employee_id": current_user["employee_id"],
         "email": current_user["email"],
         "full_name": current_user.get("display_name", ""),
         "role": current_user["role"],
+        "csrf_token": current_user.get("csrf_token"),
     }

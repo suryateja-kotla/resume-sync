@@ -14,26 +14,31 @@ const api = axios.create({
 
 // ── CSRF ─────────────────────────────────────────────────────────────────────
 // Cookies are sent automatically, so a cookie-authenticated API is CSRF-exposed
-// by default. The backend issues a second, deliberately JS-readable cookie; we
-// echo its value in a header on every state-changing request. An attacker's
-// page can cause the request to be sent but cannot read our cookie to populate
-// the header, so the backend's comparison fails.
+// by default. The backend hands us a token inside the JSON body of /auth/me —
+// an authenticated response only our own JS ever sees — and we hold it here in
+// memory, echoing it back in a header on every state-changing request.
 //
-// This matters more than usual here: frontend and backend sit on different
-// *.run.app hosts, which forces SameSite=None and removes the partial
-// protection SameSite would otherwise provide.
-const CSRF_COOKIE = 'sf_csrf'
+// This used to be a second, JS-readable cookie instead (the classic
+// double-submit pattern), which silently never worked: a cookie set by the
+// backend's origin is invisible to `document.cookie` running on the
+// frontend's different *.run.app origin, regardless of SameSite — that's a
+// same-origin-policy rule about script access to cookies, a completely
+// separate boundary from the one SameSite governs. Every unsafe request was
+// missing the header as a result, which is why this exists now: a JSON
+// response body, unlike a cookie, does cross that boundary correctly.
+//
+// setCsrfToken is called from AuthContext after each /auth/me — on load, and
+// implicitly whenever the session is confirmed fresh.
+let csrfToken: string | null = null
 const UNSAFE_METHODS = ['post', 'put', 'patch', 'delete']
 
-function readCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
-  return match ? decodeURIComponent(match[1]) : null
+export function setCsrfToken(token: string | null) {
+  csrfToken = token
 }
 
 api.interceptors.request.use(config => {
-  if (UNSAFE_METHODS.includes((config.method ?? '').toLowerCase())) {
-    const token = readCookie(CSRF_COOKIE)
-    if (token) config.headers['X-CSRF-Token'] = token
+  if (UNSAFE_METHODS.includes((config.method ?? '').toLowerCase()) && csrfToken) {
+    config.headers['X-CSRF-Token'] = csrfToken
   }
   return config
 })
@@ -48,6 +53,7 @@ api.interceptors.response.use(
   error => {
     const isAuthProbe = error.config?.url?.includes('/auth/me')
     if (error.response?.status === 401 && !isAuthProbe) {
+      setCsrfToken(null)
       redirectToLogin()
     }
     return Promise.reject(error)

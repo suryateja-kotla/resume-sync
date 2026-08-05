@@ -173,15 +173,41 @@ async def update_employee_profile(
             updated[field] = new_value
     logger.info(f"Updating profile for employee_id={employee_id} with data: {updated}")
 
-    # Strip nulls and ensure required string fields are always present
-    def _replace_nulls(data):
-        if isinstance(data, dict):
-            return {k: _replace_nulls(v) if v is not None else "" for k, v in data.items()}
-        if isinstance(data, list):
-            return [_replace_nulls(i) if i is not None else "" for i in data]
-        return data
+    # Force None -> "" only for the handful of fields EmployeePayload actually
+    # requires as plain (non-Optional) strings — full_name, company.name,
+    # designation, duration, institution, stream. Old DB docs occasionally
+    # miss these, and Pydantic rejects them outright if absent.
+    #
+    # This used to be a blanket recursive walk forcing None -> "" everywhere,
+    # which also hit Optional[float] fields like education.percentage,
+    # education.cgpa and total_experience. Pydantic correctly refuses "" as a
+    # float, so any profile with a blank percentage/cgpa failed validation on
+    # every save — while the route still returned HTTP 200 with a status:
+    # "error" body, so the UI showed "Saved successfully!" over a save that
+    # silently did nothing. Optional numeric/string fields are left as None,
+    # which Pydantic already handles correctly via their own defaults.
+    personal_info = updated.get("personal_info")
+    if isinstance(personal_info, dict) and personal_info.get("full_name") is None:
+        personal_info["full_name"] = ""
 
-    updated = _replace_nulls(updated)
+    for we in updated.get("work_experience") or []:
+        if not isinstance(we, dict):
+            continue
+        if we.get("designation") is None:
+            we["designation"] = ""
+        if we.get("duration") is None:
+            we["duration"] = ""
+        company = we.get("company")
+        if isinstance(company, dict) and company.get("name") is None:
+            company["name"] = ""
+
+    for edu in updated.get("education") or []:
+        if not isinstance(edu, dict):
+            continue
+        if edu.get("institution") is None:
+            edu["institution"] = ""
+        if edu.get("stream") is None:
+            edu["stream"] = ""
 
     # Ensure project_description is always present (may be absent in old DB docs)
     for we in updated.get("work_experience", []):

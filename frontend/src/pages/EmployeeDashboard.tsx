@@ -298,7 +298,7 @@ export default function EmployeeDashboard() {
     setSaving(true)
     setSaveMsg('')
     try {
-      await api.put('/employee-profile', {
+      const { data } = await api.put('/employee-profile', {
         personal_info: profile?.resume?.personal_info,
         profile_summary: profile?.resume?.profile_summary,
         total_experience: profile?.resume?.total_experience,
@@ -308,6 +308,14 @@ export default function EmployeeDashboard() {
         achievements: profile?.resume?.achievements,
         ...patch,
       })
+      // This route returns HTTP 200 even when the save failed validation —
+      // status lives in the body, matching every other route in this file.
+      // Skipping this check is exactly what showed "Saved successfully!"
+      // over a save that silently did nothing.
+      if (data.status !== 'success') {
+        setSaveMsg(data.message || 'Failed to save. Please try again.')
+        return
+      }
       setSaveMsg('Saved successfully!')
       await fetchProfile()
       setActiveModal(null)

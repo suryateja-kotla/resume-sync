@@ -80,7 +80,10 @@ async def create_session(
     await col_sessions.insert_one(
         {
             "session_hash": _hash(session_id),
-            "csrf_hash": _hash(csrf_token),
+            # Plaintext, deliberately — see the CSRF note in the module
+            # docstring for why this doesn't need the same protection as
+            # session_hash.
+            "csrf_token": csrf_token,
             "employee_id": employee_id,
             "entra_object_id": entra_object_id,
             "email": email,
@@ -148,7 +151,7 @@ def verify_csrf(session: dict[str, Any], token: str | None) -> bool:
     """Constant-time compare of the submitted CSRF token against the session."""
     if not token:
         return False
-    return secrets.compare_digest(session.get("csrf_hash", ""), _hash(token))
+    return secrets.compare_digest(session.get("csrf_token", ""), token)
 
 
 async def revoke_session(session_id: str) -> None:
