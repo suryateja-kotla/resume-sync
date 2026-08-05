@@ -2,11 +2,17 @@ import { useState } from 'react'
 import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, Download, Sparkles, CalendarCheck } from 'lucide-react'
 import api, { API_BASE_URL } from '../../api/axios'
 import { useCachedResource, invalidate } from '../../hooks/useCachedResource'
+import { useAuth } from '../../context/AuthContext'
 import { SkillSummaryRow, MonthlyResponse, MONTHLY_RESPONSE_BADGE, getSkillBadgeClass } from '../../types/hr'
 
 // actorEmail is gone: the backend records the signed-in user as the audit
 // actor, so the client no longer states who it claims to be.
 export default function EmployeeListSection() {
+  // Delete is ADMIN-only on the backend (require_admin, not require_hr) —
+  // 55 people hold the HR persona, including IT/Finance/Ops staff who have
+  // no business deleting records. The delete UI mirrors that here, rather
+  // than showing HR a button that always 403s.
+  const { isAdmin } = useAuth()
   const { data: listData, loading, refresh } = useCachedResource<
     { status: string; data: SkillSummaryRow[]; count: number }
   >('hr:employee-list', '/hr/skill-summary-employees')
@@ -181,7 +187,7 @@ export default function EmployeeListSection() {
                     <th className="px-5 py-3.5">Current Skill</th>
                     <th className="px-5 py-3.5">Experience</th>
                     <th className="px-5 py-3.5">Monthly Status</th>
-                    <th className="px-5 py-3.5">Actions</th>
+                    {isAdmin && <th className="px-5 py-3.5">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -224,15 +230,17 @@ export default function EmployeeListSection() {
                           )
                         })()}
                       </td>
-                      <td className="px-5 py-4">
-                        <button
-                          onClick={() => setDeleteTarget(emp)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600 transition hover:border-rose-200 hover:bg-rose-100"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Remove
-                        </button>
-                      </td>
+                      {isAdmin && (
+                        <td className="px-5 py-4">
+                          <button
+                            onClick={() => setDeleteTarget(emp)}
+                            className="inline-flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600 transition hover:border-rose-200 hover:bg-rose-100"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Remove
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
