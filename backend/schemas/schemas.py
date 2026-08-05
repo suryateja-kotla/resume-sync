@@ -57,7 +57,9 @@ class EmployeePayload(BaseModel):
 
 # Employee profile
 class ProfileUpdateRequest(BaseModel):
-    email: str
+    """`email` is intentionally absent — the target employee is always the
+    signed-in session, never a client-supplied value. See routes.py."""
+
     profile_summary: Optional[str] = None
     technical_skills: Optional[Dict[str, List[str]]] = None
     total_experience: Optional[float] = None
@@ -71,10 +73,9 @@ class ProfileUpdateRequest(BaseModel):
 
 # Experience Snapshot (employee_skill_summary collection)
 class SkillSummaryUpdateRequest(BaseModel):
-    """employee_id and name are intentionally excluded — they are immutable
-    and always derived server-side from the authenticated employee record."""
+    """employee_id, name and email are intentionally excluded — they are
+    immutable and always derived server-side from the signed-in session."""
 
-    email: str
     current_designation: Optional[str] = None
     current_skill: Optional[str] = None
     total_exp: Optional[float] = None
@@ -86,6 +87,8 @@ class SkillSummaryUpdateRequest(BaseModel):
 
 # HR — onboarding invite
 class SendResumeInviteRequest(BaseModel):
+    """`actor_email` is intentionally absent — the audit trail records the
+    signed-in HR session's employee_id, never a client-supplied value."""
+
     email: str
     name: Optional[str] = None
-    actor_email: Optional[str] = None

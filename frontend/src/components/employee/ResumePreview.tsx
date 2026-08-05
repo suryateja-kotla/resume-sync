@@ -38,7 +38,6 @@ export default function ResumePreview({ open, onClose, displayName, profile }: P
     setDocLoading(true)
     setDocError('')
     api.get('/employee-profile/resume-preview-file', {
-      params: { email: profile.email },
       responseType: 'blob',
     })
       .then(async ({ data }) => {

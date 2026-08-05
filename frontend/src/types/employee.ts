@@ -90,6 +90,13 @@ export interface SkillSummary {
   secondary_skill: string
   is_on_bench: boolean
   skill_history: SkillHistoryEntry[]
+  /** Set server-side on every save. Drives the "last updated N months ago"
+   *  staleness nudge — completeness alone cannot show that a 100%-complete
+   *  profile has not been touched since it was seeded. */
+  updated_at?: string
+  /** Fields derived from the resume rather than chosen by the employee.
+   *  Cleared as soon as they save. Empty means everything was confirmed. */
+  prefilled_fields?: string[]
 }
 
 export type ActiveModal =

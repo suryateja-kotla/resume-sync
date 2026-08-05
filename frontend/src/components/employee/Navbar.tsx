@@ -5,11 +5,12 @@ interface Props {
   fullName?: string
   email?: string
   employeeId?: string
-  onChangePassword: () => void
   onLogout: () => void
 }
 
-export default function Navbar({ fullName, email, employeeId, onChangePassword, onLogout }: Props) {
+// The "Change Password" item is gone — there is no application password to
+// change. Credentials live in Entra ID and are managed through Microsoft.
+export default function Navbar({ fullName, email, employeeId, onLogout }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -80,16 +81,6 @@ export default function Navbar({ fullName, email, employeeId, onChangePassword, 
               <p className="text-xs text-slate-500 truncate">{email}</p>
             </div>
             <div className="py-1.5">
-              <button
-                onClick={() => { setMenuOpen(false); onChangePassword() }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-600 hover:bg-violet-50 hover:text-violet-700 transition-colors text-left"
-              >
-                <svg className="w-4 h-4 text-violet-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                </svg>
-                Change Password
-              </button>
               <button
                 onClick={() => { setMenuOpen(false); onLogout() }}
                 className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-colors text-left"

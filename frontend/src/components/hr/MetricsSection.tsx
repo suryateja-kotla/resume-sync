@@ -1,24 +1,12 @@
-import { useState, useEffect } from 'react'
 import { ShieldCheck } from 'lucide-react'
-import api from '../../api/axios'
+import { useCachedResource } from '../../hooks/useCachedResource'
 import { HRMetrics } from '../../types/hr'
 
 export default function MetricsSection() {
-  const [metrics, setMetrics] = useState<HRMetrics | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    fetchMetrics()
-  }, [])
-
-  const fetchMetrics = async () => {
-    setLoading(true)
-    try {
-      const { data } = await api.get('/hr/metrics')
-      if (data.status === 'success') setMetrics(data.data)
-    } catch { /* ignore */ }
-    finally { setLoading(false) }
-  }
+  const { data, loading } = useCachedResource<{ status: string; data: HRMetrics }>(
+    'hr:metrics', '/hr/metrics'
+  )
+  const metrics = data?.status === 'success' ? data.data : null
 
   if (loading || !metrics) {
     return (

@@ -2,19 +2,21 @@ import os
 import tempfile
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Response, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, BackgroundTasks
 from fastapi.responses import FileResponse
 from schemas.schemas import EmployeePayload
 import logging
 from constants.skill_categories import SKILL_CATEGORIES
 from tools.resume_tool import generate_resume_docx
 from tools.excel_tools import create_talent_excel
+from services.auth_service import CurrentUser, get_current_user, require_admin, require_hr
 from services.gcs_service import delete_resume, download_resume_bytes
 from services.db_service import (
     get_audit_log,
     get_all_skill_summary_employees,
-    get_bench_employees,
+    get_talent_pool,
     get_employee_by_email,
+    get_employee_by_id,
     get_employee_resume_data,
     get_employee_skill_summary,
     get_employees_by_skill,
@@ -38,6 +40,20 @@ from schemas.schemas import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Every route below carries an explicit Depends(...). There is no
+# router-level default: `/health` is deliberately public, and each other
+# route states its own requirement so the required level is visible at the
+# call site rather than inherited from somewhere else.
+#
+#   get_current_user  any signed-in employee — self-service routes
+#   require_hr        HR or ADMIN            — read-only HR views + exports
+#   require_admin     ADMIN only             — delete-employee, audit log
+#
+# Identity is always taken from `current_user` (the session), never from a
+# request parameter. The previous version of this file trusted `?email=` and
+# `?actor_email=` from the caller — meaning any request could read or modify
+# any employee's record, and choose whose name appeared in the audit log.
+
 
 @router.get("/health")
 async def health_check():
@@ -45,8 +61,11 @@ async def health_check():
 
 
 @router.get("/employee-profile")
-async def get_employee_profile(email: str):
-    emp = await get_employee_by_email(email)
+async def get_employee_profile(current_user: CurrentUser = Depends(get_current_user)):
+    """Always the caller's own profile. There is no employee_id/email
+    parameter — nothing in the frontend needs to view anyone else's profile
+    through this route; HR uses the directory endpoints for that."""
+    emp = await get_employee_by_id(current_user.employee_id)
     if not emp:
         return {"status": "error", "message": "Employee not found"}
     resume = await get_employee_resume_data(emp.get("employeeId", ""))
@@ -65,23 +84,19 @@ async def get_employee_profile(email: str):
 
 
 @router.get("/employee-profile/resume-preview-file")
-async def get_resume_preview_file(email: str):
+async def get_resume_preview_file(current_user: CurrentUser = Depends(get_current_user)):
     """Streams the employee's own generated resume DOCX bytes, for the
     frontend to render client-side (docx-preview). Proxying through the
     backend — rather than returning a signed GCS URL — only needs plain
     object-read access, not the signing-key permission a signed URL requires."""
-    emp = await get_employee_by_email(email)
-    if not emp:
-        raise HTTPException(status_code=404, detail="Employee not found")
-
-    blob_name = await get_resume_path(emp.get("employeeId", ""))
+    blob_name = await get_resume_path(current_user.employee_id)
     if not blob_name:
         raise HTTPException(status_code=404, detail="No resume on file")
 
     try:
         content = download_resume_bytes(blob_name)
     except Exception as e:
-        logger.error(f"Failed to download resume for preview ({email}): {e}")
+        logger.error(f"Failed to download resume for preview ({current_user.employee_id}): {e}")
         raise HTTPException(status_code=502, detail="Could not load resume document")
 
     return Response(
@@ -91,7 +106,9 @@ async def get_resume_preview_file(email: str):
 
 
 @router.get("/hr/resume-file/{employee_id}")
-async def get_resume_file_for_hr(employee_id: str):
+async def get_resume_file_for_hr(
+    employee_id: str, current_user: CurrentUser = Depends(require_hr)
+):
     """Streams a resume DOCX by employee_id, for HR's Excel export
     hyperlinks — same proxy-through-backend approach as
     resume-preview-file, since we don't have a signing-capable credential
@@ -120,12 +137,18 @@ async def get_resume_file_for_hr(employee_id: str):
 
 
 @router.put("/employee-profile")
-async def update_employee_profile(request: ProfileUpdateRequest):
-    emp = await get_employee_by_email(request.email)
+async def update_employee_profile(
+    request: ProfileUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Updates the caller's own profile. The target is the session's
+    employee_id — previously this took `email` from the request body, so any
+    caller could rewrite any employee's resume."""
+    employee_id = current_user.employee_id
+    emp = await get_employee_by_id(employee_id)
     if not emp:
         return {"status": "error", "message": "Employee not found"}
 
-    employee_id = emp.get("employeeId", "")
     existing_resume = await get_employee_resume_data(employee_id) or {}
 
     updated = {**existing_resume}
@@ -205,12 +228,12 @@ async def update_employee_profile(request: ProfileUpdateRequest):
 
 
 @router.get("/employee-skill-summary")
-async def get_skill_summary(email: str):
-    emp = await get_employee_by_email(email)
+async def get_skill_summary(current_user: CurrentUser = Depends(get_current_user)):
+    employee_id = current_user.employee_id
+    emp = await get_employee_by_id(employee_id)
     if not emp:
         return {"status": "error", "message": "Employee not found"}
 
-    employee_id = emp.get("employeeId", "")
     summary = await get_employee_skill_summary(employee_id)
     return {
         "status": "success",
@@ -227,14 +250,17 @@ async def get_skill_summary(email: str):
 
 
 @router.put("/employee-skill-summary")
-async def update_skill_summary(request: SkillSummaryUpdateRequest):
-    emp = await get_employee_by_email(request.email)
+async def update_skill_summary(
+    request: SkillSummaryUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    employee_id = current_user.employee_id
+    emp = await get_employee_by_id(employee_id)
     if not emp:
         return {"status": "error", "message": "Employee not found"}
 
-    # employee_id and name are always derived from the employee record below —
-    # they are never taken from the request body, which keeps them immutable.
-    employee_id = emp.get("employeeId", "")
+    # employee_id, name and email are always derived from the session and the
+    # employee record — never from the request body, which keeps them immutable.
     name = emp.get("fullName", "")
     before = await get_employee_skill_summary(employee_id) or {}
 
@@ -277,7 +303,7 @@ async def update_skill_summary(request: SkillSummaryUpdateRequest):
 
 
 @router.get("/hr/new-employees")
-async def list_new_employees():
+async def list_new_employees(current_user: CurrentUser = Depends(require_admin)):
     """Employees who haven't uploaded a resume yet — candidates for an
     onboarding invite email from HR."""
     employees = await get_new_employees()
@@ -289,6 +315,10 @@ async def list_new_employees():
                 "name": e.get("fullName"),
                 "email": e.get("email"),
                 "department": e.get("department"),
+                "job_title": e.get("jobTitle"),
+                # Distinguishes "never started" from "has a skill profile but
+                # no resume" — the two need different nudges.
+                "has_profile": e.get("hasProfile", False),
             }
             for e in employees
         ],
@@ -296,13 +326,19 @@ async def list_new_employees():
 
 
 @router.post("/hr/send-resume-invite")
-async def send_resume_invite(request: SendResumeInviteRequest):
-    """Sends an onboarding invite to any email HR types in — the recipient
-    does not need to already exist in employee_data. This only sends the
-    email; it does not create a login/account, so the recipient can only
-    actually log in once they've been provisioned in employee_data through
-    whatever onboarding/IT process HR uses for that (account creation and
-    credentials are a separate, not-yet-built concern)."""
+async def send_resume_invite(
+    request: SendResumeInviteRequest,
+    current_user: CurrentUser = Depends(require_admin),
+):
+    """Sends an onboarding invite to an arbitrary email address. ADMIN only.
+
+    Restricted alongside the New Employees screen it belongs to. It also
+    deserves the tighter gate on its own merits: it sends mail on the
+    company's behalf to any address given, so with 55 people holding the HR
+    persona it is not something that should be broadly reachable. Before the
+    SSO work it was unauthenticated — an open relay usable for phishing from
+    your own domain.
+    """
     from config.email_config import settings as email_settings
     from services.email_service import EmailService
 
@@ -310,6 +346,9 @@ async def send_resume_invite(request: SendResumeInviteRequest):
     if "@" not in email or "." not in email.split("@")[-1]:
         return {"status": "error", "message": "Enter a valid email address"}
 
+    # get_employee_by_email is safe here: it looks up a display name for the
+    # invite, it does not establish who the caller is. Identity comes from
+    # current_user above.
     emp = await get_employee_by_email(email)
     recipient_name = (
         (emp.get("fullName") if emp else None)
@@ -318,14 +357,18 @@ async def send_resume_invite(request: SendResumeInviteRequest):
     )
 
     try:
-        EmailService(email_settings).send_new_employee_invite(
+        await EmailService(email_settings).send_onboarding_invite(
             recipient_email=email,
             recipient_name=recipient_name,
+            employee_id=emp.get("employeeId") if emp else None,
             update_url=email_settings.frontend_update_url,
         )
         await write_audit_event(
             event_type="INVITE_SENT",
-            actor=request.actor_email or "HR",
+            # The actor is the signed-in HR user, not a caller-supplied
+            # string — the old `actor_email` parameter let anyone choose
+            # whose name appeared against this action.
+            actor=current_user.employee_id,
             employee_id=emp.get("employeeId") if emp else None,
             payload={"invited_email": email},
         )
@@ -336,21 +379,21 @@ async def send_resume_invite(request: SendResumeInviteRequest):
 
 
 @router.get("/hr/metrics")
-async def hr_metrics():
+async def hr_metrics(current_user: CurrentUser = Depends(require_hr)):
     """Live metrics for the HR Monitoring dashboard — coverage, activity, skill distribution."""
     data = await get_hr_metrics()
     return {"status": "success", "data": data}
 
 
 @router.get("/skill-categories")
-async def list_skill_categories():
+async def list_skill_categories(current_user: CurrentUser = Depends(get_current_user)):
     """The fixed list of canonical skill categories used by the Skill
     Profile dropdown (employee side) and the HR Skill Dashboard racks."""
     return {"status": "success", "data": SKILL_CATEGORIES}
 
 
 @router.get("/hr/skill-summary")
-async def skill_summary():
+async def skill_summary(current_user: CurrentUser = Depends(require_hr)):
     """Unique skill racks (derived from employee_skill_summary.current_skill)
     with employee headcount, for the HR Skill Dashboard."""
     data = await get_skill_rack_summary()
@@ -358,7 +401,11 @@ async def skill_summary():
 
 
 @router.get("/hr/skill-employees")
-async def skill_employees(skill: str, min_skill_exp: Optional[float] = None):
+async def skill_employees(
+    skill: str,
+    min_skill_exp: Optional[float] = None,
+    current_user: CurrentUser = Depends(require_hr),
+):
     """Employees whose current_skill matches the given skill rack, optionally
     filtered to those with at least min_skill_exp years in that skill."""
     data = await get_employees_by_skill(skill, min_skill_exp)
@@ -367,7 +414,9 @@ async def skill_employees(skill: str, min_skill_exp: Optional[float] = None):
 
 @router.get("/hr/skill-employees-excel")
 async def skill_employees_excel(
-    skill: str, min_skill_exp: Optional[float] = None, actor_email: Optional[str] = None
+    skill: str,
+    min_skill_exp: Optional[float] = None,
+    current_user: CurrentUser = Depends(require_hr),
 ):
     """Generates an Excel report for the employees in one skill rack
     (e.g. clicking 'Generate Excel' on the Java rack drill-down panel),
@@ -401,21 +450,31 @@ async def skill_employees_excel(
 
 
 @router.get("/hr/all-employees")
-async def all_employees():
+async def all_employees(current_user: CurrentUser = Depends(require_hr)):
     """Full org-wide employee directory for the HR Employee List section."""
     data = await get_full_employee_directory()
     return {"status": "success", "count": len(data), "data": data}
 
 
-@router.get("/hr/bench-employees")
-async def bench_employees():
-    """Employees who have marked themselves as currently on bench."""
-    data = await get_bench_employees()
-    return {"status": "success", "count": len(data), "data": data}
+@router.get("/hr/talent-pool")
+async def talent_pool(current_user: CurrentUser = Depends(require_hr)):
+    """Talent Pool — unallocated staff, split into Bench and Interns.
+
+    Both come from the Entra department rather than a manual flag, so the two
+    lists stay correct without anyone maintaining them.
+    """
+    data = await get_talent_pool()
+    return {
+        "status": "success",
+        "bench": data["bench"],
+        "interns": data["interns"],
+        "bench_count": len(data["bench"]),
+        "intern_count": len(data["interns"]),
+    }
 
 
 @router.get("/hr/skill-summary-employees")
-async def skill_summary_employees():
+async def skill_summary_employees(current_user: CurrentUser = Depends(require_hr)):
     """Employee List sourced directly from employee_skill_summary — the 6
     skill-profile fields (no bench status) joined with resume_store."""
     data = await get_all_skill_summary_employees()
@@ -423,7 +482,7 @@ async def skill_summary_employees():
 
 
 @router.get("/hr/all-employees-excel")
-async def all_employees_excel(actor_email: Optional[str] = None):
+async def all_employees_excel(current_user: CurrentUser = Depends(require_hr)):
     """Generates an Excel report containing every employee in the org."""
     data = await get_full_employee_directory()
     if not data:
@@ -464,8 +523,14 @@ async def audit_log(
     date_to: Optional[datetime] = None,
     page: int = 1,
     page_size: int = 50,
+    current_user: CurrentUser = Depends(require_admin),
 ):
-    """Paginated, filterable audit trail for the HR Audit Log section."""
+    """Paginated, filterable audit trail. ADMIN only.
+
+    Deliberately stricter than the rest of /hr/*: the audit log records who
+    did what across the whole org, and 55 people hold the HR persona. Reading
+    it is an oversight function, so it stays with the accountable role.
+    """
     result = await get_audit_log(
         event_type=event_type,
         date_from=date_from,
@@ -477,7 +542,17 @@ async def audit_log(
 
 
 @router.get("/download-excel")
-async def download_excel(filename: str, background_tasks: BackgroundTasks):
+async def download_excel(
+    filename: str,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_hr),
+):
+    """Streams a generated Excel export, then deletes the server's copy.
+
+    Requires HR: the files contain the full employee directory. Previously
+    anonymous, so anyone who guessed a filename could both take a copy of the
+    org's data and destroy HR's export in the process.
+    """
     output_dir = os.getenv("EXCEL_OUTPUT_DIR", "output_excels")
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(output_dir, safe_filename)
@@ -496,14 +571,23 @@ async def download_excel(filename: str, background_tasks: BackgroundTasks):
 
 
 @router.delete("/hr/employee/{employee_id}")
-async def delete_employee_record(employee_id: str, actor_email: Optional[str] = None):
-    """Hard-delete an employee and all their data (HR only)."""
+async def delete_employee_record(
+    employee_id: str, current_user: CurrentUser = Depends(require_admin)
+):
+    """Hard-delete an employee and all their data. ADMIN only.
+
+    The most destructive action in the app, and irreversible. It sits with
+    ADMIN rather than HR because 55 people hold the HR persona — including
+    IT, Finance and Operations staff who have no business deleting records.
+    """
     result = await delete_employee(employee_id)
     if result.get("status") != "success":
         raise HTTPException(status_code=500, detail=result.get("message", "Delete failed"))
     await write_audit_event(
         event_type="EMPLOYEE_DELETED",
-        actor=actor_email or "HR",
+        # Was `actor_email or "HR"` — a caller-supplied string, so the one
+        # action most needing accountability had the least of it.
+        actor=current_user.employee_id,
         employee_id=employee_id,
         payload={"deleted_employee_id": employee_id},
     )
@@ -534,11 +618,18 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> Optional[str]:
 @router.post("/upload-resume")
 async def upload_resume(
     file: UploadFile = File(...),
-    employee_id: str = Form(...),
-    employee_email: str = Form(None),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
+    """Ingests the caller's own resume.
+
+    employee_id and employee_email were form fields, so an anonymous caller
+    could overwrite any employee's resume — and each call runs an LLM
+    ingestion, so it also burned API spend. Both now come from the session.
+    """
     from services.agent_runner import run_agent
 
+    employee_id = current_user.employee_id
+    employee_email = current_user.email
     file_path = None
     try:
         file_bytes = await file.read()

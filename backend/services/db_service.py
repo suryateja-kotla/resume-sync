@@ -1,5 +1,7 @@
 from datetime import datetime, timezone, timedelta
+import asyncio
 import os
+import time
 from typing import Any, Dict, Optional
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -48,6 +50,93 @@ async def get_employee_by_email(email: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+# ── Active-employee cache ────────────────────────────────────────────────────
+#
+# Every HR view calls active_employee_filter(), and each Firestore round trip
+# costs ~330ms regardless of how little data it returns. Fetching the same
+# ~330 ids on every request added most of a second to every screen.
+#
+# The set only changes when the directory sync runs (daily), so a short TTL is
+# both safe and enough: worst case a leaver stays visible for a few minutes.
+# invalidate_active_employee_cache() is called by the sync so a change lands
+# immediately rather than waiting out the TTL.
+_ACTIVE_CACHE_TTL_SECONDS = 300
+_active_cache: Dict[bool, tuple[float, list[str]]] = {}
+
+
+def invalidate_active_employee_cache() -> None:
+    _active_cache.clear()
+
+
+async def active_employee_filter(exclude_hr: bool = True) -> Dict[str, Any]:
+    """A Mongo filter restricting employee_skill_summary to current staff.
+
+    Two exclusions, both of which used to be applied inconsistently:
+
+    `canSignIn` — `employee_skill_summary` predates the directory sync and has
+    no notion of someone having left; only `user_accounts` knows that. Without
+    this, HR lists, skill searches, exports and headcount metrics all silently
+    included leavers.
+
+    `role != HR` — HR-persona staff are the audience for these screens, not
+    the subject of them, so they are excluded from the employee inventory.
+    This rule already existed inside get_full_employee_directory but nowhere
+    else, so the Employee List showed 246 while the Excel export of the same
+    data showed 243. Centralising it keeps every view agreeing.
+
+    Returns a filter rather than a list so callers can merge it into their own
+    query. If the lookup fails it returns an empty filter — showing slightly
+    too much is a better failure than showing HR an empty dashboard.
+    """
+    cached = _active_cache.get(exclude_hr)
+    if cached and (time.monotonic() - cached[0]) < _ACTIVE_CACHE_TTL_SECONDS:
+        return {"employee_id": {"$in": cached[1]}}
+
+    try:
+        criteria: Dict[str, Any] = {"canSignIn": True}
+        if exclude_hr:
+            criteria["role"] = {"$ne": "HR"}
+        ids = [
+            doc["employeeId"]
+            async for doc in col_user_accounts.find(
+                criteria, {"_id": 0, "employeeId": 1}
+            )
+            if doc.get("employeeId")
+        ]
+        _active_cache[exclude_hr] = (time.monotonic(), ids)
+        return {"employee_id": {"$in": ids}}
+    except PyMongoError as e:
+        logger.error(f"active_employee_filter error: {e}")
+        return {}
+
+
+async def get_employee_by_id(employee_id: str) -> Optional[Dict[str, Any]]:
+    """Same merged shape as get_employee_by_email, keyed on employeeId.
+
+    Routes use this rather than get_employee_by_email once identity comes
+    from the session — the session carries employee_id (the JWT/session
+    subject), never a client-supplied email, so this is the lookup that keeps
+    self-service routes from trusting anything the caller sent.
+    """
+    try:
+        account = await col_user_accounts.find_one({"employeeId": employee_id}, {"_id": 0})
+        if not account:
+            return None
+        skill = await col_employee_skill_summary.find_one(
+            {"employee_id": employee_id}, {"_id": 0}
+        ) or {}
+        return {
+            **account,
+            "fullName":    skill.get("name", account.get("email", "").split("@")[0].title()),
+            "currentRole": skill.get("current_designation", ""),
+            "department":  skill.get("department", ""),
+            "isOnBench":   skill.get("is_on_bench", False),
+        }
+    except PyMongoError as e:
+        logger.error(f"get_employee_by_id error: {e}")
+        return None
+
+
 async def get_all_employees() -> list[Dict[str, Any]]:
     try:
         cursor = col_employee_skill_summary.find(
@@ -58,6 +147,109 @@ async def get_all_employees() -> list[Dict[str, Any]]:
     except PyMongoError as e:
         logger.error(f"get_all_employees error: {e}")
         return []
+
+
+async def get_monthly_email_recipients() -> list[Dict[str, Any]]:
+    """Employees who should receive the monthly resume-update prompt.
+
+    Distinct from get_all_employees(), which reads employee_skill_summary and
+    returns everyone it finds. This reads user_accounts, which the Entra
+    directory sync maintains, and applies two filters:
+
+      canSignIn            — no point prompting someone who cannot log in to
+                             action it (guests, interns, disabled accounts)
+      receivesMonthlyEmail — excludes the non-technical support functions
+
+    Source of truth is the directory sync, so a leaver stops being emailed on
+    the next sync rather than lingering in a stale spreadsheet-derived list.
+
+    Each recipient carries `has_resume` / `has_skill_profile` so the caller can
+    send copy matching what the person will actually see when they click. The
+    cycle used to send everyone "Want to update your resume?", including 33
+    people who had never uploaded one and would land on a blank upload screen.
+    """
+    try:
+        accounts = await col_user_accounts.find(
+            {
+                "canSignIn": True,
+                "receivesMonthlyEmail": True,
+                "email": {"$exists": True, "$nin": [None, ""]},
+            },
+            {"_id": 0, "email": 1, "fullName": 1, "employeeId": 1},
+        ).to_list(length=None)
+
+        ids = [a["employeeId"] for a in accounts if a.get("employeeId")]
+
+        # Two batched lookups rather than two per recipient — at ~330ms per
+        # Firestore round trip, per-recipient queries would add three minutes
+        # to a 278-person cycle.
+        with_resume = set(
+            await col_employee_resume_data.distinct(
+                "employee_id", {"employee_id": {"$in": ids}}
+            )
+        )
+        with_profile = {
+            doc["employee_id"]
+            for doc in await col_employee_skill_summary.find(
+                {"employee_id": {"$in": ids}}, {"_id": 0, "employee_id": 1}
+            ).to_list(length=None)
+            if doc.get("employee_id")
+        }
+
+        return [
+            {
+                "email": doc["email"],
+                "fullName": doc.get("fullName") or "Team Member",
+                "employeeId": doc.get("employeeId"),
+                "has_resume": doc.get("employeeId") in with_resume,
+                "has_skill_profile": doc.get("employeeId") in with_profile,
+            }
+            for doc in accounts
+        ]
+    except PyMongoError as e:
+        logger.error(f"get_monthly_email_recipients error: {e}")
+        return []
+
+
+async def mark_prompt_sent(employee_ids: list[str]) -> int:
+    """Record that this cycle's prompt went out.
+
+    Without this, `derive_monthly_response` has no prompt date to compare
+    against and every employee shows "No Response" in the HR list forever —
+    which is why that column has never worked. Written after a successful
+    send, so a failed delivery does not start someone's response clock.
+    """
+    if not employee_ids:
+        return 0
+    try:
+        result = await col_employee_skill_summary.update_many(
+            {"employee_id": {"$in": employee_ids}},
+            {"$set": {
+                "monthly_prompt_sent_at": datetime.now(timezone.utc),
+                # Clear last cycle's answer so the badge reflects *this* month.
+                "monthly_response": None,
+            }},
+        )
+        return result.modified_count
+    except PyMongoError as e:
+        logger.error(f"mark_prompt_sent error: {e}")
+        return 0
+
+
+async def set_monthly_response(employee_id: str, response: str) -> bool:
+    """Record an explicit "updated" or "declined" for the current cycle."""
+    try:
+        result = await col_employee_skill_summary.update_one(
+            {"employee_id": employee_id},
+            {"$set": {
+                "monthly_response": response,
+                "monthly_response_at": datetime.now(timezone.utc),
+            }},
+        )
+        return result.matched_count > 0
+    except PyMongoError as e:
+        logger.error(f"set_monthly_response error for {employee_id}: {e}")
+        return False
 
 
 async def get_employee_resume_data(employee_id: str) -> Optional[Dict[str, Any]]:
@@ -112,6 +304,68 @@ async def upsert_employee_data(
 
     except PyMongoError as e:
         logger.error(f"upsert_employee_data error for {employee_id}: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+async def upsert_user_from_directory(
+    profile: Dict[str, Any],
+    decision: Any,
+    entra_object_id: str,
+) -> Dict[str, Any]:
+    """Write an Entra directory record into user_accounts.
+
+    Called from two places with identical effect: the sign-in callback (so a
+    change lands immediately for the person signing in) and the scheduled
+    directory sync (so it lands for everyone else). Keyed on employeeId, which
+    the tenant populates consistently and which — unlike email — does not change
+    when someone marries or the mail domain is rebranded.
+
+    Entra is the source of truth for every field written here. The app's own
+    employee spreadsheet was verified stale: engineering-only, missing HR, TM,
+    TA, leadership and all interns.
+    """
+    employee_id = decision.employee_id
+    if not employee_id:
+        return {"status": "error", "message": "no employee_id"}
+
+    now = datetime.now(timezone.utc)
+    fields: Dict[str, Any] = {
+        "employeeId":       employee_id,
+        "entraObjectId":    entra_object_id,
+        "email":            (profile.get("mail") or profile.get("userPrincipalName") or "").strip().lower(),
+        "fullName":         profile.get("displayName"),
+        "jobTitle":         profile.get("jobTitle"),
+        "department":       profile.get("department"),
+        # Aliases folded ("Biz Dev" -> "Business Development"). Group HR
+        # reporting on this; keep `department` for the raw Entra value.
+        "departmentCanonical": decision.department_canonical,
+        "officeLocation":   profile.get("officeLocation"),
+        "employeeType":     profile.get("employeeType"),
+        "role":             decision.role.value if decision.role else None,
+        "roleReason":       decision.reason,
+        "canSignIn":        decision.can_sign_in,
+        "isIntern":         decision.is_intern,
+        "inTalentPool":     decision.in_talent_pool,
+        "receivesMonthlyEmail": decision.receives_monthly_email,
+        "status":           "Active" if decision.can_sign_in else "Inactive",
+        "directorySyncedAt": now,
+    }
+
+    try:
+        result = await col_user_accounts.update_one(
+            {"employeeId": employee_id},
+            {"$set": fields, "$setOnInsert": {"createdAt": now}},
+            upsert=True,
+        )
+        return {
+            "status": "success",
+            "data": {
+                "upserted": result.upserted_id is not None,
+                "modified": result.modified_count,
+            },
+        }
+    except PyMongoError as e:
+        logger.error(f"upsert_user_from_directory error for {employee_id}: {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -264,6 +518,11 @@ async def upsert_employee_skill_summary(
                 else existing.get("skill_started_at", datetime.now(timezone.utc))
             ),
             "updated_at": datetime.now(timezone.utc),
+            # Any save clears the machine-guessed marker — once a human has
+            # been through the form, the values are theirs regardless of where
+            # they started. Resume ingestion re-sets this immediately after
+            # its own call, so pre-filled values stay marked until confirmed.
+            "prefilled_fields": [],
         }
 
         result = await col_employee_skill_summary.update_one(
@@ -284,32 +543,67 @@ async def upsert_employee_skill_summary(
 
 
 async def get_new_employees() -> list[Dict[str, Any]]:
-    """Employees in employee_skill_summary who have not uploaded a resume yet —
-    candidates for an onboarding invite email from HR."""
+    """Staff with no resume yet — candidates for an onboarding invite.
+
+    Sourced from `user_accounts`, which the Entra directory sync keeps current,
+    rather than `employee_skill_summary`, which is a frozen snapshot of the
+    July spreadsheet import.
+
+    That distinction was the whole bug: 85 people had no resume but only ONE
+    appeared here, because the other 84 were never in the spreadsheet. They are
+    exactly the population this screen exists to surface — recent joiners the
+    sync pulled from the directory. The screen built to find people needing
+    onboarding was blind to everyone who joined after the import.
+
+    Excludes HR-persona staff (they are the audience, not the subject) and
+    anyone who cannot sign in, since an invite they cannot action is noise.
+    """
     try:
-        resumed_ids = set(await col_employee_resume_data.distinct("employee_id"))
-        cursor = col_employee_skill_summary.find(
+        accounts = await col_user_accounts.find(
             {
-                "employee_id": {"$nin": list(resumed_ids)},
-                "email": {"$exists": True, "$ne": None},
+                "canSignIn": True,
+                "role": {"$ne": "HR"},
+                "email": {"$exists": True, "$nin": [None, ""]},
             },
-            {"_id": 0, "employee_id": 1, "name": 1, "email": 1},
+            {
+                "_id": 0, "employeeId": 1, "fullName": 1, "email": 1,
+                "department": 1, "jobTitle": 1, "directorySyncedAt": 1,
+            },
+        ).sort("employeeId", 1).to_list(length=None)
+
+        # Unfiltered reads, then intersect in Python. Passing a 300-element
+        # $in to Firestore's compat layer took 24 seconds; fetching both
+        # collections whole and filtering here takes under two, because each
+        # is a single round trip over a few hundred small documents.
+        resumed, profile_docs = await asyncio.gather(
+            col_employee_resume_data.distinct("employee_id"),
+            col_employee_skill_summary.find(
+                {}, {"_id": 0, "employee_id": 1}
+            ).to_list(length=None),
         )
-        results = []
-        async for d in cursor:
-            # Exclude HR accounts
-            acct = await col_user_accounts.find_one(
-                {"employeeId": d["employee_id"]}, {"_id": 0, "role": 1}
-            )
-            if acct and acct.get("role") == "HR":
-                continue
-            results.append({
-                "employeeId": d["employee_id"],
-                "fullName":   d.get("name", ""),
-                "email":      d.get("email", ""),
-                "department": d.get("department", ""),
-            })
-        return results
+        resumed = set(resumed)
+        with_profile = {
+            doc["employee_id"] for doc in profile_docs if doc.get("employee_id")
+        }
+
+        return [
+            {
+                "employeeId":  a["employeeId"],
+                "fullName":    a.get("fullName") or "",
+                "email":       a.get("email") or "",
+                "department":  a.get("department") or "",
+                "jobTitle":    a.get("jobTitle") or "",
+                # Lets HR distinguish "never started" from "uploaded a resume
+                # but never completed their skill profile" — different nudge.
+                "hasProfile":  a["employeeId"] in with_profile,
+            }
+            for a in accounts
+            if a.get("employeeId")
+            and a["employeeId"] not in resumed
+            # Service/admin mailboxes carry a synthetic ADMIN- id. They are not
+            # people and have no resume to chase.
+            and not a["employeeId"].startswith("ADMIN-")
+        ]
     except PyMongoError as e:
         logger.error(f"get_new_employees error: {e}")
         return []
@@ -324,7 +618,11 @@ async def get_skill_rack_summary() -> list[Dict[str, Any]]:
     skill gaps, not just where headcount already exists."""
     try:
         counts: Dict[str, int] = {}
-        cursor = col_employee_skill_summary.find({}, {"_id": 0, "current_skill": 1})
+        # Rack headcounts must exclude leavers, otherwise HR sees capacity
+        # that does not exist.
+        cursor = col_employee_skill_summary.find(
+            await active_employee_filter(), {"_id": 0, "current_skill": 1}
+        )
         async for doc in cursor:
             category = normalize_skill(doc.get("current_skill", ""))
             counts[category] = counts.get(category, 0) + 1
@@ -351,7 +649,7 @@ async def get_employees_by_skill(
     try:
         target = normalize_skill(skill)
         cursor = col_employee_skill_summary.find(
-            {},
+            await active_employee_filter(),
             {
                 "_id": 0,
                 "employee_id": 1,
@@ -402,12 +700,11 @@ async def get_full_employee_directory() -> list[Dict[str, Any]]:
     sourced entirely from employee_skill_summary (single source of truth)
     joined with user_accounts for role/status and resume collections."""
     try:
-        # Exclude HR accounts
-        hr_ids = set()
-        async for acct in col_user_accounts.find({"role": "HR"}, {"_id": 0, "employeeId": 1}):
-            hr_ids.add(acct["employeeId"])
-
-        skill_docs = await col_employee_skill_summary.find({}, {"_id": 0}).to_list(length=None)
+        # HR exclusion now lives in active_employee_filter() so the Employee
+        # List and this export cannot drift apart again.
+        skill_docs = await col_employee_skill_summary.find(
+            await active_employee_filter(), {"_id": 0}
+        ).to_list(length=None)
 
         resumed_ids = set(await col_employee_resume_data.distinct("employee_id"))
         resume_paths = await _get_resume_paths_by_employee_id(
@@ -417,8 +714,6 @@ async def get_full_employee_directory() -> list[Dict[str, Any]]:
         results = []
         for skill in skill_docs:
             emp_id = skill["employee_id"]
-            if emp_id in hr_ids:
-                continue
             results.append(
                 {
                     "employee_id":        emp_id,
@@ -506,8 +801,10 @@ async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
     employees were seeded directly without a file path record.
     """
     try:
+        # Current staff only — leavers were appearing in this list because
+        # employee_skill_summary has no active/inactive concept of its own.
         docs = await col_employee_skill_summary.find(
-            {},
+            await active_employee_filter(),
             {
                 "_id": 0,
                 "employee_id": 1,
@@ -547,8 +844,95 @@ async def get_all_skill_summary_employees() -> list[Dict[str, Any]]:
         return []
 
 
+async def get_talent_pool() -> Dict[str, Any]:
+    """Talent Pool, split into the two tabs the HR screen shows.
+
+    Membership is derived from the Entra department, not from a manual flag.
+    Departments in this tenant are client/project names (EFX-*, Loqbox,
+    Revvity...), so "Talent Pool" genuinely means unallocated — and someone
+    rolling onto a project leaves the pool automatically when HR updates their
+    department. That is why the old is_on_bench toggle is gone: it was a second
+    source of truth that nobody remembered to update.
+
+      bench   — permanent staff, unallocated. They have app profiles, so their
+                skill data is joined in from employee_skill_summary.
+      interns — no app account and no profile by design. Directory fields only;
+                the screen is read-only for them. When their record flips to
+                permanent, the directory sync emails them an invite and they
+                move to the bench tab on the next run.
+    """
+    try:
+        bench: list[Dict[str, Any]] = []
+        interns: list[Dict[str, Any]] = []
+
+        accounts = await col_user_accounts.find(
+            {"inTalentPool": True},
+            {
+                "_id": 0, "employeeId": 1, "fullName": 1, "email": 1,
+                "jobTitle": 1, "department": 1, "isIntern": 1, "canSignIn": 1,
+                "employeeType": 1, "officeLocation": 1,
+            },
+        ).sort("employeeId", 1).to_list(length=None)
+
+        # One batched lookup instead of one per bench member. Each Firestore
+        # round trip costs ~330ms, so the previous per-person find_one made
+        # this screen take 16 seconds for 27 people.
+        bench_ids = [
+            a["employeeId"] for a in accounts
+            if a.get("employeeId") and not a.get("isIntern")
+        ]
+        skills_by_id = {
+            doc["employee_id"]: doc
+            for doc in await col_employee_skill_summary.find(
+                {"employee_id": {"$in": bench_ids}}, {"_id": 0}
+            ).to_list(length=None)
+        }
+
+        for account in accounts:
+            employee_id = account.get("employeeId")
+
+            if account.get("isIntern"):
+                interns.append({
+                    "employee_id":     employee_id,
+                    "name":            account.get("fullName"),
+                    "email":           account.get("email"),
+                    "job_title":       account.get("jobTitle"),
+                    "employee_type":   account.get("employeeType"),
+                    "office_location": account.get("officeLocation"),
+                })
+                continue
+
+            # Bench members are real employees, so surface the skill data HR
+            # actually allocates on. Absent for anyone who has not built a
+            # profile yet — shown as blank rather than hidden, so HR can see
+            # who still needs chasing.
+            skill = skills_by_id.get(employee_id, {})
+            bench.append({
+                "employee_id":         employee_id,
+                "name":                account.get("fullName") or skill.get("name"),
+                "email":               account.get("email"),
+                "job_title":           account.get("jobTitle"),
+                "current_designation": skill.get("current_designation"),
+                "current_skill":       skill.get("current_skill"),
+                "total_exp":           skill.get("total_exp"),
+                "current_skill_exp":   skill.get("current_skill_exp"),
+                "primary_skill":       skill.get("primary_skill"),
+                "secondary_skill":     skill.get("secondary_skill"),
+                "has_profile":         bool(skill),
+            })
+
+        return {"bench": bench, "interns": interns}
+    except PyMongoError as e:
+        logger.error(f"get_talent_pool error: {e}")
+        return {"bench": [], "interns": []}
+
+
 async def get_bench_employees() -> list[Dict[str, Any]]:
-    """Returns all employees in employee_skill_summary where is_on_bench=True."""
+    """Returns all employees in employee_skill_summary where is_on_bench=True.
+
+    Superseded by get_talent_pool(); kept only so nothing that still imports
+    it breaks. Remove once the is_on_bench field is dropped entirely.
+    """
     try:
         docs = await col_employee_skill_summary.find(
             {"is_on_bench": True},
@@ -625,41 +1009,72 @@ async def get_hr_metrics() -> Dict[str, Any]:
         last_7  = now - timedelta(days=7)
         last_30 = now - timedelta(days=30)
 
-        total_employees   = await col_employee_skill_summary.count_documents({})
-        total_with_resume = await col_employee_resume_data.count_documents({})
-        pending_resumes   = total_employees - total_with_resume
-        coverage_pct      = round((total_with_resume / total_employees * 100) if total_employees else 0, 1)
+        # Every count here is scoped to current staff. Including leavers made
+        # headcount and resume-coverage both wrong: the denominator counted
+        # people who had left, so coverage read lower than it really was.
+        active = await active_employee_filter()
 
-        bench_count = await col_employee_skill_summary.count_documents({"is_on_bench": True})
+        # Both counts must come from the *same* population or coverage is
+        # nonsense. Scoping them separately produced 248 resumes against 246
+        # employees — 100.8% coverage and -2 pending — because some people
+        # have parsed resume data but no skill-summary row.
+        active_summary_ids = [
+            doc["employee_id"]
+            async for doc in col_employee_skill_summary.find(
+                active, {"_id": 0, "employee_id": 1}
+            )
+            if doc.get("employee_id")
+        ]
+        total_employees = len(active_summary_ids)
 
-        # Skill distribution
-        pipeline = [
-            {"$match": {"current_skill": {"$exists": True, "$ne": ""}}},
+        # These seven queries are independent of each other, so they run
+        # concurrently. Run sequentially they cost seven ~330ms Firestore
+        # round trips in a row — over 2s of pure waiting on a dashboard that
+        # returns a handful of numbers.
+        skill_pipeline = [
+            {"$match": {**active, "current_skill": {"$exists": True, "$ne": ""}}},
             {"$group": {"_id": "$current_skill", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}},
             {"$limit": 12},
         ]
-        skill_dist_raw = await col_employee_skill_summary.aggregate(pipeline).to_list(length=None)
+        (
+            total_with_resume,
+            bench_count,
+            skill_dist_raw,
+            uploads_7d,
+            updates_7d,
+            invites_7d,
+            uploads_30d,
+            feed_docs,
+        ) = await asyncio.gather(
+            col_employee_resume_data.count_documents(
+                {"employee_id": {"$in": active_summary_ids}}
+            ),
+            # Bench comes from the directory (department = Talent Pool), not
+            # the retired is_on_bench flag.
+            col_user_accounts.count_documents({"inTalentPool": True, "canSignIn": True}),
+            col_employee_skill_summary.aggregate(skill_pipeline).to_list(length=None),
+            col_audit_data.count_documents({"event_type": "RESUME_UPLOAD",   "timestamp": {"$gte": last_7}}),
+            col_audit_data.count_documents({"event_type": "PROFILE_UPDATED", "timestamp": {"$gte": last_7}}),
+            col_audit_data.count_documents({"event_type": "INVITE_SENT",     "timestamp": {"$gte": last_7}}),
+            col_audit_data.count_documents({"event_type": "RESUME_UPLOAD",   "timestamp": {"$gte": last_30}}),
+            col_audit_data.find(
+                {"event_type": {"$in": ["RESUME_UPLOAD", "PROFILE_UPDATED", "INVITE_SENT", "SKILL_PROFILE_UPDATED"]}},
+            ).sort("timestamp", -1).limit(8).to_list(length=8),
+        )
+
+        pending_resumes = total_employees - total_with_resume
+        coverage_pct    = round((total_with_resume / total_employees * 100) if total_employees else 0, 1)
         skill_distribution = [{"skill": d["_id"], "count": d["count"]} for d in skill_dist_raw]
-
-        # Recent activity (last 7 days)
-        uploads_7d  = await col_audit_data.count_documents({"event_type": "RESUME_UPLOAD",   "timestamp": {"$gte": last_7}})
-        updates_7d  = await col_audit_data.count_documents({"event_type": "PROFILE_UPDATED", "timestamp": {"$gte": last_7}})
-        invites_7d  = await col_audit_data.count_documents({"event_type": "INVITE_SENT",     "timestamp": {"$gte": last_7}})
-        uploads_30d = await col_audit_data.count_documents({"event_type": "RESUME_UPLOAD",   "timestamp": {"$gte": last_30}})
-
-        # Last 8 recent events for activity feed
-        feed_cursor = col_audit_data.find(
-            {"event_type": {"$in": ["RESUME_UPLOAD", "PROFILE_UPDATED", "INVITE_SENT", "SKILL_PROFILE_UPDATED"]}},
-        ).sort("timestamp", -1).limit(8)
-        recent_feed = []
-        async for doc in feed_cursor:
-            recent_feed.append({
-                "event_type": doc.get("event_type"),
-                "actor":      doc.get("actor"),
+        recent_feed = [
+            {
+                "event_type":  doc.get("event_type"),
+                "actor":       doc.get("actor"),
                 "employee_id": doc.get("employee_id"),
-                "timestamp":  doc["timestamp"].isoformat() if doc.get("timestamp") else None,
-            })
+                "timestamp":   doc["timestamp"].isoformat() if doc.get("timestamp") else None,
+            }
+            for doc in feed_docs
+        ]
 
         return {
             "overview": {

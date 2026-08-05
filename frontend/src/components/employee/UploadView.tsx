@@ -8,9 +8,17 @@ interface Props {
   hasEmployeeId: boolean
   onFileChange: (e: ChangeEvent<HTMLInputElement>) => void
   onUpload: () => void
+  /** True when the user already has a resume and is replacing it. */
+  isReplacing?: boolean
+  /** Only supplied when replacing — someone with no resume has nothing to
+   *  cancel back to, so the button is hidden for them. */
+  onCancel?: () => void
 }
 
-export default function UploadView({ uploading, uploadFile, uploadMsg, hasEmployeeId, onFileChange, onUpload }: Props) {
+export default function UploadView({
+  uploading, uploadFile, uploadMsg, hasEmployeeId,
+  onFileChange, onUpload, isReplacing = false, onCancel,
+}: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   return (
@@ -37,11 +45,23 @@ export default function UploadView({ uploading, uploadFile, uploadMsg, hasEmploy
         {/* Heading */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: 28, fontWeight: 800, color: '#1e1b4b', margin: 0, letterSpacing: '-0.3px' }}>
-            Upload Your Resume
+            {isReplacing ? 'Replace Your Resume' : 'Upload Your Resume'}
           </h2>
           <p style={{ marginTop: 8, fontSize: 14, color: '#64748b' }}>
             We'll extract your information automatically using AI — PDF or DOCX, max 10 MB.
           </p>
+          {/* Replacing overwrites the parsed profile, so say so before they
+              commit rather than after. */}
+          {isReplacing && (
+            <p style={{
+              marginTop: 12, padding: '10px 14px', fontSize: 13, lineHeight: 1.5,
+              color: '#92400e', background: '#fffbeb',
+              border: '1px solid #fde68a', borderRadius: 10, textAlign: 'left',
+            }}>
+              This replaces your current resume and re-reads your profile from
+              the new file. Edits you made by hand will be overwritten.
+            </p>
+          )}
         </div>
 
         {/* Card */}
@@ -132,8 +152,25 @@ export default function UploadView({ uploading, uploadFile, uploadMsg, hasEmploy
               transition: 'background 0.15s',
             }}
           >
-            {uploading ? <><IconSpinner /> Processing resume…</> : 'Upload & Process Resume'}
+            {uploading
+              ? <><IconSpinner /> Processing resume…</>
+              : isReplacing ? 'Replace & Process Resume' : 'Upload & Process Resume'}
           </button>
+
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              disabled={uploading}
+              style={{
+                width: '100%', marginTop: 10, padding: '12px', borderRadius: 14,
+                border: '1px solid #e2e8f0', background: '#fff', color: '#64748b',
+                cursor: uploading ? 'not-allowed' : 'pointer',
+                fontWeight: 600, fontSize: 14,
+              }}
+            >
+              Cancel — keep my current resume
+            </button>
+          )}
 
           <p style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 12, marginBottom: 0 }}>
             Processing may take 30–60 seconds.

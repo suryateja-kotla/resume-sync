@@ -31,9 +31,10 @@ openpyxl
 PyMuPDF                 # fitz — fast PDF text + image extraction
 Pillow                  # PIL — embedded image extraction from DOCX resumes
 
-# Auth
-python-jose[cryptography]
-passlib[bcrypt]
+# Auth — Entra ID SSO (no passwords; passlib/bcrypt removed with the old
+# email+password login).
+python-jose[cryptography]   # id_token signature verification against Entra JWKS
+httpx                       # OIDC token exchange + Microsoft Graph calls
 slowapi
 
 # Observability

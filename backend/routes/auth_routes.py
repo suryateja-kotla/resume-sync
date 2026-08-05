@@ -1,397 +1,235 @@
 """
 Auth routes — /api/auth/*
 
-Endpoints:
-  POST /auth/login                 — email + password → access + refresh tokens
-  POST /auth/refresh               — refresh token → new access token
-  POST /auth/logout                — invalidates refresh token in DB
-  POST /auth/change-password       — authenticated, requires current password
-  POST /auth/forgot-password       — sends reset email (always returns 200)
-  POST /auth/reset-password        — validates reset token, sets new password
+Entra ID single sign-on. There is no password anywhere in this application.
+
+    GET  /auth/login     redirect the browser to Microsoft
+    GET  /auth/callback  Microsoft redirects back here; session is minted
+    POST /auth/logout    revoke the session
+    GET  /auth/me        who am I (frontend calls this on load)
+
+The callback is the only place a session is created, and it refuses to create
+one unless `role_service.evaluate()` says the person may sign in — so the
+intern block, the guest block and the disabled-account block are all enforced
+at the single point where access is granted.
+
+Failures redirect to the frontend with a short error code rather than
+returning JSON, because the browser is doing a top-level navigation here and
+the user needs to land on a page, not a stack trace.
 """
 
+from __future__ import annotations
+
 import logging
-import os
-from datetime import datetime, timezone
+import urllib.parse
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import JSONResponse, RedirectResponse
 
-from services.auth_service import (
-    create_access_token,
-    create_refresh_token,
-    decode_refresh_token,
-    generate_reset_token,
-    get_current_user,
-    hash_password,
-    hash_reset_token,
-    is_same_password,
-    validate_password_strength,
-    verify_password,
+from config.entra_config import settings
+from services.auth_service import CurrentUser, get_current_user, public_user
+from services.db_service import upsert_user_from_directory, write_audit_event
+from services.entra_service import (
+    build_authorize_url,
+    exchange_code,
+    fetch_me,
+    start_login,
+    verify_id_token,
 )
-from services.db_service import col_user_accounts, col_employee_skill_summary, write_audit_event
+from services.role_service import evaluate
+from services.session_service import (
+    consume_login_transaction,
+    create_login_transaction,
+    create_session,
+    revoke_session,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-limiter = Limiter(key_func=get_remote_address)
+# Binds the sign-in attempt to this browser, so an attacker cannot feed a
+# victim a callback URL from a sign-in *they* started (login CSRF).
+_LOGIN_STATE_COOKIE = "sf_login_state"
 
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:4200")
-
-
-# ── Request / Response schemas ────────────────────────────────────────────────
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class LoginResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    employee_id: str
-    email: str
-    role: str
-    full_name: str
-    must_change_password: bool
+# Error codes surfaced to the frontend. Deliberately coarse — the detail goes
+# to the server log, not to the query string.
+_ERRORS = {
+    "intern_not_permanent": "Your account is not yet enabled for sign-in. "
+                            "HR will invite you once your employment is confirmed.",
+    "no_employee_id": "Your directory record has no Employee ID. Please contact HR.",
+    "guest_account": "Guest accounts cannot access SyncFolio.",
+    "account_disabled": "Your account is disabled.",
+    "auth_failed": "Sign-in failed. Please try again.",
+}
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
+def _redirect_with_error(code: str) -> RedirectResponse:
+    target = f"{settings.frontend_base_url}/login?error={urllib.parse.quote(code)}"
+    return RedirectResponse(target, status_code=status.HTTP_302_FOUND)
 
 
-class LogoutRequest(BaseModel):
-    refresh_token: str
+def _cookie_kwargs(http_only: bool, max_age: int | None = None) -> dict:
+    kwargs = {
+        "httponly": http_only,
+        "secure": settings.session_cookie_secure,
+        "samesite": settings.session_cookie_samesite,
+        "path": "/",
+    }
+    if max_age is not None:
+        kwargs["max_age"] = max_age
+    return kwargs
 
 
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+# ── GET /auth/login ──────────────────────────────────────────────────────────
 
 
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-async def _get_account_by_email(email: str) -> dict | None:
-    return await col_user_accounts.find_one({"email": email}, {"_id": 0})
-
-
-async def _get_account_by_id(employee_id: str) -> dict | None:
-    return await col_user_accounts.find_one({"employeeId": employee_id}, {"_id": 0})
-
-
-async def _get_full_name(employee_id: str) -> str:
-    skill = await col_employee_skill_summary.find_one(
-        {"employee_id": employee_id}, {"_id": 0, "name": 1}
-    )
-    return skill.get("name", "") if skill else ""
-
-
-# ── POST /auth/login ──────────────────────────────────────────────────────────
-
-@router.post("/login", response_model=LoginResponse)
-@limiter.limit("10/15minute")
-async def login(request: Request, body: LoginRequest):
-    """
-    Authenticates an employee with email + password.
-    Returns JWT access token (8 h) and refresh token (7 d).
-    Rejects inactive accounts and accounts without a password set.
-    """
-    account = await _get_account_by_email(body.email)
-
-    # Always run verify_password even on failure to prevent timing attacks
-    dummy_hash = "$2b$12$invalidhashusedtoblindtiming00000000000000000000000000000"
-    stored_hash = account.get("password_hash", dummy_hash) if account else dummy_hash
-    password_ok = verify_password(body.password, stored_hash)
-
-    if not account or not password_ok:
-        # Log failed attempt without exposing which field was wrong
-        if account:
-            await write_audit_event(
-                event_type="FAILED_LOGIN",
-                actor=account.get("employeeId", body.email),
-                employee_id=account.get("employeeId"),
-                payload={"email": body.email, "reason": "wrong_password"},
-            )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password.",
-        )
-
-    if account.get("status") != "Active":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account is inactive. Contact HR.",
-        )
-
-    if not account.get("password_hash"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Password not set. Contact HR to get your initial credentials.",
-        )
-
-    employee_id = account["employeeId"]
-    role = account["role"]
-
-    # Issue tokens
-    access_token = create_access_token(employee_id, role)
-    refresh_token, refresh_hash = create_refresh_token(employee_id)
-
-    # Persist refresh token hash + update last login
-    await col_user_accounts.update_one(
-        {"employeeId": employee_id},
-        {"$set": {
-            "refresh_token_hash": refresh_hash,
-            "lastLoginAt": datetime.now(timezone.utc),
-        }},
+@router.get("/login")
+async def login():
+    """Kick off sign-in. The browser is sent to Microsoft; nothing is trusted
+    from the caller, so this endpoint takes no parameters — in particular no
+    caller-supplied redirect target, which would be an open-redirect."""
+    transaction = start_login()
+    await create_login_transaction(
+        transaction.state, transaction.nonce, transaction.code_verifier
     )
 
-    full_name = await _get_full_name(employee_id)
+    response = RedirectResponse(
+        build_authorize_url(transaction), status_code=status.HTTP_302_FOUND
+    )
+    response.set_cookie(
+        _LOGIN_STATE_COOKIE,
+        transaction.state,
+        **_cookie_kwargs(http_only=True, max_age=600),
+    )
+    return response
 
-    return LoginResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        employee_id=employee_id,
-        email=body.email,
-        role=role,
-        full_name=full_name,
-        must_change_password=account.get("must_change_password", False),
+
+# ── GET /auth/callback ───────────────────────────────────────────────────────
+
+
+@router.get("/callback")
+async def callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    if error:
+        logger.warning("Entra returned an error at callback: %s", error)
+        return _redirect_with_error("auth_failed")
+
+    if not code or not state:
+        return _redirect_with_error("auth_failed")
+
+    # The state must match both the server-side transaction and this browser's
+    # cookie. Either alone is weaker: the transaction proves we started it, the
+    # cookie proves *this* browser started it.
+    if request.cookies.get(_LOGIN_STATE_COOKIE) != state:
+        logger.warning("login state cookie mismatch — possible login CSRF")
+        return _redirect_with_error("auth_failed")
+
+    transaction = await consume_login_transaction(state)
+    if not transaction:
+        logger.warning("no matching login transaction for state (expired or replayed)")
+        return _redirect_with_error("auth_failed")
+
+    try:
+        tokens = await exchange_code(code, transaction["code_verifier"])
+        identity = await verify_id_token(tokens["id_token"], transaction["nonce"])
+        profile = await fetch_me(tokens["access_token"])
+    except Exception:
+        logger.exception("sign-in failed during token exchange or verification")
+        return _redirect_with_error("auth_failed")
+
+    # Graph /me omits userType, so evaluate() would see a missing value and
+    # treat the person as a guest. The id_token already proved they are a
+    # member of our tenant, so fill it in from that.
+    profile.setdefault("userType", "Member")
+    profile.setdefault("accountEnabled", True)
+
+    decision = evaluate(profile)
+
+    if not decision.can_sign_in:
+        logger.info(
+            "sign-in denied for %s: %s", identity.email, decision.reason
+        )
+        await write_audit_event(
+            event_type="LOGIN_DENIED",
+            actor=identity.email,
+            employee_id=decision.employee_id,
+            payload={"reason": decision.reason},
+        )
+        return _redirect_with_error(decision.reason)
+
+    # Keep the app's copy of the directory record fresh on every sign-in, so a
+    # role or department change takes effect immediately rather than waiting
+    # for the next scheduled sync.
+    await upsert_user_from_directory(profile, decision, identity.object_id)
+
+    session_id, csrf_token = await create_session(
+        employee_id=decision.employee_id,
+        entra_object_id=identity.object_id,
+        email=identity.email,
+        display_name=identity.display_name,
+        role=decision.role.value,
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
     )
 
+    await write_audit_event(
+        event_type="LOGIN",
+        actor=decision.employee_id,
+        employee_id=decision.employee_id,
+        payload={"role": decision.role.value, "reason": decision.reason},
+    )
 
-# ── POST /auth/refresh ────────────────────────────────────────────────────────
-
-@router.post("/refresh")
-async def refresh_token(body: RefreshRequest):
-    """
-    Validates the refresh token and issues a new access token.
-    The refresh token hash must match what is stored in user_accounts.
-    """
-    payload = decode_refresh_token(body.refresh_token)
-    employee_id = payload["sub"]
-
-    account = await _get_account_by_id(employee_id)
-    if not account:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Account not found.")
-
-    stored_hash = account.get("refresh_token_hash")
-    incoming_hash = hash_reset_token(body.refresh_token)  # reuses SHA-256 helper
-    if not stored_hash or stored_hash != incoming_hash:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token is invalid or has been revoked. Please log in again.",
-        )
-
-    if account.get("status") != "Active":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Account is inactive.")
-
-    new_access = create_access_token(employee_id, account["role"])
-    return {"access_token": new_access, "token_type": "bearer"}
+    response = RedirectResponse(
+        f"{settings.frontend_base_url}/", status_code=status.HTTP_302_FOUND
+    )
+    # Session id: httpOnly, unreadable by JavaScript. An XSS cannot exfiltrate it.
+    response.set_cookie(
+        settings.session_cookie_name, session_id, **_cookie_kwargs(http_only=True)
+    )
+    # CSRF token: deliberately readable, so the frontend can echo it in a header.
+    # It is not a credential on its own — it is worthless without the session cookie.
+    response.set_cookie(
+        settings.csrf_cookie_name, csrf_token, **_cookie_kwargs(http_only=False)
+    )
+    response.delete_cookie(_LOGIN_STATE_COOKIE, path="/")
+    return response
 
 
-# ── POST /auth/logout ─────────────────────────────────────────────────────────
+# ── POST /auth/logout ────────────────────────────────────────────────────────
+
 
 @router.post("/logout")
-async def logout(
-    body: LogoutRequest,
-    current_user: dict = Depends(get_current_user),
-):
+async def logout(request: Request, current_user: CurrentUser = Depends(get_current_user)):
+    """Revoke the session server-side and clear the cookies.
+
+    Deleting the row is what actually ends the session — clearing cookies alone
+    would leave a still-valid session id in anything that captured it.
     """
-    Invalidates the refresh token by clearing it from user_accounts.
-    The access token expires on its own (8 h TTL).
-    """
-    await col_user_accounts.update_one(
-        {"employeeId": current_user["employee_id"]},
-        {"$unset": {"refresh_token_hash": ""}},
-    )
-    return {"status": "success", "message": "Logged out successfully."}
-
-
-# ── POST /auth/change-password ────────────────────────────────────────────────
-
-@router.post("/change-password")
-async def change_password(
-    body: ChangePasswordRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Authenticated password change. Requires the current password.
-    Clears must_change_password flag and invalidates all refresh tokens.
-    """
-    employee_id = current_user["employee_id"]
-    account = await _get_account_by_id(employee_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found.")
-
-    # Verify current password
-    if not verify_password(body.current_password, account.get("password_hash", "")):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect.",
-        )
-
-    # Block password reuse
-    if is_same_password(body.new_password, account.get("password_hash", "")):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be different from the current password.",
-        )
-
-    # Enforce strength rules
-    error = validate_password_strength(body.new_password)
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-
-    new_hash = hash_password(body.new_password)
-    await col_user_accounts.update_one(
-        {"employeeId": employee_id},
-        {"$set": {
-            "password_hash":         new_hash,
-            "must_change_password":  False,
-            "reset_token_hash":      None,
-            "reset_token_expires":   None,
-        },
-        "$unset": {"refresh_token_hash": ""}},  # invalidate all sessions
-    )
+    session_id = request.cookies.get(settings.session_cookie_name)
+    if session_id:
+        await revoke_session(session_id)
 
     await write_audit_event(
-        event_type="PASSWORD_CHANGED",
-        actor=employee_id,
-        employee_id=employee_id,
-        payload={"method": "change_password"},
+        event_type="LOGOUT",
+        actor=current_user.employee_id,
+        employee_id=current_user.employee_id,
+        payload={},
     )
-    return {"status": "success", "message": "Password changed successfully. Please log in again."}
+
+    response = JSONResponse({"status": "success", "message": "Signed out."})
+    response.delete_cookie(settings.session_cookie_name, path="/")
+    response.delete_cookie(settings.csrf_cookie_name, path="/")
+    return response
 
 
-# ── POST /auth/forgot-password ────────────────────────────────────────────────
+# ── GET /auth/me ─────────────────────────────────────────────────────────────
 
-@router.post("/forgot-password")
-@limiter.limit("10/hour")
-async def forgot_password(request: Request, body: ForgotPasswordRequest):
+
+@router.get("/me")
+async def me(current_user: CurrentUser = Depends(get_current_user)):
+    """Called by the frontend on load to rehydrate auth state.
+
+    The frontend holds no token and cannot decode anything itself, so this is
+    the only way it learns who it is — which is the point: the client is no
+    longer the authority on its own identity or role.
     """
-    Sends a password reset link to the given email.
-    Always returns 200 regardless of whether the email exists (prevents email enumeration).
-    """
-    generic_response = {
-        "status": "success",
-        "message": "If that email is registered, a reset link has been sent.",
-    }
-
-    account = await _get_account_by_email(body.email)
-    if not account or account.get("status") != "Active":
-        return generic_response
-
-    employee_id = account["employeeId"]
-    raw_token, hashed_token, expires_at = generate_reset_token()
-
-    await col_user_accounts.update_one(
-        {"employeeId": employee_id},
-        {"$set": {
-            "reset_token_hash":    hashed_token,
-            "reset_token_expires": expires_at,
-        }},
-    )
-
-    reset_url = f"{FRONTEND_BASE_URL}/reset-password?token={raw_token}"
-    full_name = await _get_full_name(employee_id)
-
-    # Send email
-    try:
-        from config.email_config import settings as email_settings
-        from services.email_service import EmailService
-        EmailService(email_settings).send_password_reset(
-            recipient_email=body.email,
-            recipient_name=full_name or body.email.split("@")[0].title(),
-            reset_url=reset_url,
-            expires_minutes=30,
-        )
-        logger.info(f"Password reset email sent to {body.email}")
-    except Exception as e:
-        logger.error(f"Password reset email failed for {body.email}: {type(e).__name__}: {e}", exc_info=True)
-
-    await write_audit_event(
-        event_type="PASSWORD_RESET_REQUESTED",
-        actor=employee_id,
-        employee_id=employee_id,
-        payload={"email": body.email},
-    )
-    return generic_response
-
-
-# ── POST /auth/reset-password ─────────────────────────────────────────────────
-
-@router.post("/reset-password")
-async def reset_password(body: ResetPasswordRequest):
-    """
-    Validates the one-time reset token and sets the new password.
-    Token is compared against its SHA-256 hash stored in DB.
-    Token is invalidated immediately after use.
-    """
-    incoming_hash = hash_reset_token(body.token)
-
-    account = await col_user_accounts.find_one(
-        {"reset_token_hash": incoming_hash}, {"_id": 0}
-    )
-
-    if not account:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reset link is invalid or has already been used.",
-        )
-
-    # Check expiry
-    expires_at = account.get("reset_token_expires")
-    if not expires_at or datetime.now(timezone.utc) > expires_at.replace(tzinfo=timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reset link has expired. Please request a new one.",
-        )
-
-    # Enforce strength rules
-    error = validate_password_strength(body.new_password)
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-
-    # Block password reuse
-    if is_same_password(body.new_password, account.get("password_hash", "")):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be different from the previous one.",
-        )
-
-    new_hash = hash_password(body.new_password)
-    employee_id = account["employeeId"]
-
-    await col_user_accounts.update_one(
-        {"employeeId": employee_id},
-        {
-            "$set": {
-                "password_hash":        new_hash,
-                "must_change_password": False,
-                "reset_token_hash":     None,
-                "reset_token_expires":  None,
-            },
-            "$unset": {"refresh_token_hash": ""},  # revoke all active sessions
-        },
-    )
-
-    await write_audit_event(
-        event_type="PASSWORD_RESET_COMPLETED",
-        actor=employee_id,
-        employee_id=employee_id,
-        payload={"email": account.get("email")},
-    )
-    return {"status": "success", "message": "Password reset successfully. You can now log in."}
+    return {"status": "success", "user": public_user(current_user)}
