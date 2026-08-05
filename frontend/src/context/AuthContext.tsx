@@ -41,7 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await api.get('/auth/me')
       const signedIn = data.status === 'success'
-      setUser(signedIn ? data.user : null)
+      // public_user() in auth_service.py returns employee_id/full_name
+      // (snake_case, matching the rest of the backend's JSON) — mapped to
+      // camelCase here, once, so every consumer of `user` can rely on the
+      // frontend's normal naming convention instead of each one needing to
+      // know which shape the API uses.
+      setUser(signedIn ? {
+        employeeId: data.user.employee_id,
+        email: data.user.email,
+        fullName: data.user.full_name,
+        role: data.user.role,
+      } : null)
       // The CSRF token rides inside this same response body — see axios.ts
       // for why it can no longer travel as a cookie. Every unsafe request
       // (save, upload, delete, logout) depends on this being set correctly.
