@@ -229,7 +229,11 @@ class EntraSettings(BaseSettings):
     # The cookie carries an opaque session id, never a token, so sessions
     # stay server-side revocable.
     session_cookie_name: str = "sf_session"
-    csrf_cookie_name: str = "sf_csrf"
+    # No csrf_cookie_name: the CSRF token used to also travel as a second,
+    # JS-readable cookie, but a cookie set by the backend's origin is
+    # invisible to document.cookie on the frontend's different *.run.app
+    # origin — that field never worked. The token now travels inside the
+    # JSON body of /auth/me instead (see auth_service.public_user).
     session_idle_minutes: int = 60
     session_absolute_hours: int = 8
 

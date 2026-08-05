@@ -161,7 +161,10 @@ async def callback(request: Request, code: str = "", state: str = "", error: str
     # for the next scheduled sync.
     await upsert_user_from_directory(profile, decision, identity.object_id)
 
-    session_id, csrf_token = await create_session(
+    # csrf_token itself isn't used here — it's read back from the session on
+    # the next /auth/me call instead of being set as a cookie. See the note
+    # on response.set_cookie below.
+    session_id, _csrf_token = await create_session(
         employee_id=decision.employee_id,
         entra_object_id=identity.object_id,
         email=identity.email,
@@ -185,11 +188,11 @@ async def callback(request: Request, code: str = "", state: str = "", error: str
     response.set_cookie(
         settings.session_cookie_name, session_id, **_cookie_kwargs(http_only=True)
     )
-    # CSRF token: deliberately readable, so the frontend can echo it in a header.
-    # It is not a credential on its own — it is worthless without the session cookie.
-    response.set_cookie(
-        settings.csrf_cookie_name, csrf_token, **_cookie_kwargs(http_only=False)
-    )
+    # csrf_token is NOT set as a cookie here — a cookie set by this response
+    # (backend origin) is invisible to document.cookie on the frontend's
+    # different *.run.app origin, so a reader-cookie can never work in this
+    # deployment shape. The frontend instead fetches it from GET /auth/me,
+    # the first authenticated JSON call it makes after this redirect lands.
     response.delete_cookie(_LOGIN_STATE_COOKIE, path="/")
     return response
 
@@ -217,7 +220,6 @@ async def logout(request: Request, current_user: CurrentUser = Depends(get_curre
 
     response = JSONResponse({"status": "success", "message": "Signed out."})
     response.delete_cookie(settings.session_cookie_name, path="/")
-    response.delete_cookie(settings.csrf_cookie_name, path="/")
     return response
 
 
