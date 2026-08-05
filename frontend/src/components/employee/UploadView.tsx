@@ -97,7 +97,16 @@ export default function UploadView({
                       d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <p style={{ fontWeight: 600, fontSize: 14, color: '#1e1b4b', margin: '0 0 4px' }}>{uploadFile.name}</p>
+                <p
+                  title={uploadFile.name}
+                  style={{
+                    fontWeight: 600, fontSize: 14, color: '#1e1b4b', margin: '0 0 4px',
+                    maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {uploadFile.name}
+                </p>
                 <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>{(uploadFile.size / 1024).toFixed(0)} KB · Click to change</p>
               </>
             ) : (
