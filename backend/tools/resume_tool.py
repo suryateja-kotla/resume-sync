@@ -7,15 +7,68 @@ from tools.docx_tools import DocxTool
 from tools.normalizer import ResumeNormalizer
 from schemas.schemas import EmployeePayload
 from services.db_service import (
+    col_employee_skill_summary,
+    get_employee_by_id,
     get_employee_resume_data,
+    get_employee_skill_summary,
     save_employee_resume_data,
+    upsert_employee_skill_summary,
     write_audit_event,
     get_resume_path,
 )
 from services.gcs_service import upload_resume, delete_resume
+from services.skill_inference import derive_draft, fields_to_fill
 from instructions.extraction_instruction import EXTRACTION_INSTRUCTION
 
 logger = logging.getLogger(__name__)
+
+
+async def _seed_skill_profile(employee_id: str, resume: dict) -> None:
+    """Pre-fill empty skill-profile fields from the parsed resume.
+
+    Never raises: a resume that parsed and saved successfully must not be
+    reported as failed because a convenience step went wrong.
+    """
+    try:
+        draft = derive_draft(resume)
+        if not draft:
+            return
+
+        existing = await get_employee_skill_summary(employee_id) or {}
+        to_fill = fields_to_fill(draft, existing)
+        if not to_fill:
+            logger.info(
+                "[%s] Skill profile already populated — nothing pre-filled", employee_id
+            )
+            return
+
+        employee = await get_employee_by_id(employee_id) or {}
+        await upsert_employee_skill_summary(
+            employee_id=employee_id,
+            name=employee.get("fullName") or existing.get("name") or "",
+            email=employee.get("email") or existing.get("email"),
+            **to_fill,
+        )
+
+        # Record which fields were machine-guessed rather than chosen. Without
+        # this the profile looks confirmed: completeness reads 100%, so the
+        # employee has no reason to check — and `current_skill` inference is
+        # only ~68% accurate, because a resume shows accumulated skills while
+        # current_skill means the project they are on now. The UI uses this to
+        # ask for confirmation, and it is cleared the moment they save.
+        await col_employee_skill_summary.update_one(
+            {"employee_id": employee_id},
+            {"$set": {"prefilled_fields": sorted(to_fill.keys())}},
+        )
+        await write_audit_event(
+            event_type="SKILL_PROFILE_PREFILLED",
+            actor="resume_ingestion",
+            employee_id=employee_id,
+            payload={"fields": to_fill},
+        )
+        logger.info("[%s] Pre-filled skill profile: %s", employee_id, to_fill)
+    except Exception:
+        logger.exception("[%s] Could not pre-fill skill profile", employee_id)
 
 _USE_VERTEXAI = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() == "true"
 
@@ -447,6 +500,13 @@ async def extract_resume(
             employee_id=employee_id,
             payload={"file_path": file_path},
         )
+
+        # Seed a draft skill profile from what we just parsed. Uploading a
+        # resume used to create nothing here, so the employee had to open a
+        # separate form and type it from scratch — which 251 of 258 people
+        # never did. Only empty fields are filled, so a deliberate choice is
+        # never overwritten.
+        await _seed_skill_profile(employee_id, payload.model_dump())
 
         return {"message": "Resume extracted and saved successfully."}
 

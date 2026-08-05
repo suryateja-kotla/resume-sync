@@ -1,44 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Search, Users, Trash2, BriefcaseBusiness, BadgeCheck, Download, Sparkles, CalendarCheck } from 'lucide-react'
 import api, { API_BASE_URL } from '../../api/axios'
+import { useCachedResource, invalidate } from '../../hooks/useCachedResource'
 import { SkillSummaryRow, MonthlyResponse, MONTHLY_RESPONSE_BADGE, getSkillBadgeClass } from '../../types/hr'
 
-interface Props {
-  actorEmail?: string
-}
+// actorEmail is gone: the backend records the signed-in user as the audit
+// actor, so the client no longer states who it claims to be.
+export default function EmployeeListSection() {
+  const { data: listData, loading, refresh } = useCachedResource<
+    { status: string; data: SkillSummaryRow[]; count: number }
+  >('hr:employee-list', '/hr/skill-summary-employees')
 
-export default function EmployeeListSection({ actorEmail }: Props) {
-  const [allEmployees, setAllEmployees] = useState<SkillSummaryRow[]>([])
-  const [loading, setLoading] = useState(false)
-  const [allEmployeesCount, setAllEmployeesCount] = useState(0)
+  const allEmployees: SkillSummaryRow[] = listData?.status === 'success' ? listData.data : []
+  const allEmployeesCount = listData?.count ?? 0
+
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<SkillSummaryRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [excelGenerating, setExcelGenerating] = useState(false)
 
-  useEffect(() => {
-    fetchAllEmployees()
-  }, [])
-
-  const fetchAllEmployees = async () => {
-    setLoading(true)
-    try {
-      const { data } = await api.get('/hr/skill-summary-employees')
-      if (data.status === 'success') {
-        setAllEmployees(data.data)
-        setAllEmployeesCount(data.count)
-      }
-    } catch { /* ignore */ }
-    finally { setLoading(false) }
-  }
-
   const generateExcel = async () => {
     if (excelGenerating) return
     setExcelGenerating(true)
     try {
-      const { data } = await api.get('/hr/all-employees-excel', {
-        params: actorEmail ? { actor_email: actorEmail } : {},
-      })
+      const { data } = await api.get('/hr/all-employees-excel')
       if (data.status === 'success' && data.excel_filename) {
         window.open(`${API_BASE_URL}/download-excel?filename=${encodeURIComponent(data.excel_filename)}`, '_blank')
       }
@@ -50,11 +35,12 @@ export default function EmployeeListSection({ actorEmail }: Props) {
     if (!deleteTarget) return
     setDeleteLoading(true)
     try {
-      await api.delete(`/hr/employee/${deleteTarget.employee_id}`, {
-        params: actorEmail ? { actor_email: actorEmail } : {},
-      })
-      setAllEmployees(prev => prev.filter(e => e.employee_id !== deleteTarget.employee_id))
-      setAllEmployeesCount(prev => prev - 1)
+      await api.delete(`/hr/employee/${deleteTarget.employee_id}`)
+      // Deleting changes headcount everywhere, so drop the whole hr: namespace
+      // rather than just splicing this row out of the local list — otherwise
+      // the metrics and skill racks keep showing the deleted person.
+      invalidate('hr:')
+      await refresh()
     } catch { /* ignore */ }
     finally {
       setDeleteLoading(false)

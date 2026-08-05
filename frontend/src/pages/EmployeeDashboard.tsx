@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, ChangeEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 import {
@@ -120,7 +119,6 @@ const fromWorkExpEdits = (edits: WorkExpEdit[]): WorkExperienceItem[] => {
 
 export default function EmployeeDashboard() {
   const { user, logout } = useAuth()
-  const navigate = useNavigate()
 
   // ── Profile state ──────────────────────────────────────────────────────────
   const [profile, setProfile] = useState<ProfileData | null>(null)
@@ -164,7 +162,6 @@ export default function EmployeeDashboard() {
   const [editSkillExp, setEditSkillExp] = useState(0)
   const [editPrimarySkill, setEditPrimarySkill] = useState('')
   const [editSecondarySkill, setEditSecondarySkill] = useState('')
-  const [editIsOnBench, setEditIsOnBench] = useState(false)
 
   // Experience modal accordion state
   const [editOpenEntries, setEditOpenEntries] = useState<Set<number>>(new Set())
@@ -186,7 +183,9 @@ export default function EmployeeDashboard() {
   const fetchProfile = async () => {
     setProfileLoading(true)
     try {
-      const { data } = await api.get('/employee-profile', { params: { email: user!.email } })
+      // No email parameter — the backend derives the employee from the
+      // session, so a client can only ever fetch its own profile.
+      const { data } = await api.get('/employee-profile')
       if (data.status === 'success') {
         setProfile(data.data)
         if (!initialTabSet) {
@@ -201,7 +200,7 @@ export default function EmployeeDashboard() {
   const fetchSkillSummary = async () => {
     setSkillSummaryLoading(true)
     try {
-      const { data } = await api.get('/employee-skill-summary', { params: { email: user!.email } })
+      const { data } = await api.get('/employee-skill-summary')
       if (data.status === 'success') setSkillSummary(data.data)
     } catch { /* ignore */ }
     finally { setSkillSummaryLoading(false) }
@@ -275,15 +274,13 @@ export default function EmployeeDashboard() {
       const skillExp       = skillSummary?.current_skill_exp || 0
       const primarySkill   = skillSummary?.primary_skill || ''
       const secondarySkill = skillSummary?.secondary_skill || ''
-      const isOnBench      = skillSummary?.is_on_bench || false
       setEditDesignation(designation)
       setEditCurrentSkill(currentSkill)
       setEditTotalExp(totalExp)
       setEditSkillExp(skillExp)
       setEditPrimarySkill(primarySkill)
       setEditSecondarySkill(secondarySkill)
-      setEditIsOnBench(isOnBench)
-      snapshot = { designation, currentSkill, totalExp, skillExp, primarySkill, secondarySkill, isOnBench }
+      snapshot = { designation, currentSkill, totalExp, skillExp, primarySkill, secondarySkill }
     }
 
     editSnapshotRef.current = JSON.stringify(snapshot)
@@ -302,7 +299,6 @@ export default function EmployeeDashboard() {
     setSaveMsg('')
     try {
       await api.put('/employee-profile', {
-        email: user!.email,
         personal_info: profile?.resume?.personal_info,
         profile_summary: profile?.resume?.profile_summary,
         total_experience: profile?.resume?.total_experience,
@@ -363,14 +359,12 @@ export default function EmployeeDashboard() {
     setSkillSaveMsg('')
     try {
       const { data } = await api.put('/employee-skill-summary', {
-        email: user!.email,
         current_designation: editDesignation,
         current_skill: editCurrentSkill,
         total_exp: editTotalExp,
         current_skill_exp: editSkillExp,
         primary_skill: editPrimarySkill,
         secondary_skill: editSecondarySkill,
-        is_on_bench: editIsOnBench,
       })
       if (data.status === 'success') {
         setSkillSummary(data.data)
@@ -399,10 +393,11 @@ export default function EmployeeDashboard() {
     setUploading(true)
     setUploadMsg('')
     try {
+      // employee_id / employee_email are no longer sent — the backend takes
+      // both from the session, so a caller cannot upload against someone
+      // else's record.
       const form = new FormData()
       form.append('file', file)
-      form.append('employee_id', user.employeeId)
-      form.append('employee_email', user.email)
       const { data } = await api.post('/upload-resume', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
@@ -491,7 +486,9 @@ export default function EmployeeDashboard() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  const handleLogout = () => { logout(); navigate('/login') }
+  // logout() revokes the session server-side then navigates to /login itself,
+  // so a navigate() here would only race it.
+  const handleLogout = () => { logout() }
   const resume = profile?.resume
   const hasResume = !!profile?.hasResume
   const displayName = skillSummary?.name || user?.fullName || resume?.personal_info?.full_name || user?.email || ''
@@ -509,12 +506,15 @@ export default function EmployeeDashboard() {
         fullName={user?.fullName || undefined}
         email={user?.email}
         employeeId={user?.employeeId || undefined}
-        onChangePassword={() => navigate('/change-password')}
         onLogout={handleLogout}
       />
 
       {/* Canvas */}
-      {showUpload && !hasResume ? (
+      {/* Was `showUpload && !hasResume`, which made "Replace Resume" a no-op —
+          the flag flipped but the view stayed hidden for anyone who already
+          had a resume. onCancel is passed only in that case, since someone
+          with no resume has nothing to go back to. */}
+      {showUpload ? (
         <UploadView
           uploading={uploading}
           uploadFile={uploadFile}
@@ -522,6 +522,8 @@ export default function EmployeeDashboard() {
           hasEmployeeId={!!user?.employeeId}
           onFileChange={handleFileChange}
           onUpload={handleUpload}
+          isReplacing={hasResume}
+          onCancel={hasResume ? () => { setShowUpload(false); setUploadFile(null); setUploadMsg('') } : undefined}
         />
       ) : profileLoading ? (
         <div className="flex-1 flex items-center justify-center">
@@ -541,6 +543,7 @@ export default function EmployeeDashboard() {
               onCtaClick={
                 firstPending ? () => openModal(labelToModal[firstPending.label]) : undefined
               }
+              lastUpdatedAt={skillSummary?.updated_at}
             />
           )}
 
@@ -588,7 +591,21 @@ export default function EmployeeDashboard() {
               </SectionCard>
             ) : (
               <>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  {/* Replacing a resume is a normal thing to want — a new
+                      project, a certification, a role change. Without this the
+                      only way to refresh the parsed data was to edit every
+                      section by hand. Re-uploading re-parses and overwrites. */}
+                  <button
+                    onClick={() => setShowUpload(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-200 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Replace Resume
+                  </button>
                   <button
                     onClick={() => setShowPreview(true)}
                     className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition-all duration-200 hover:bg-violet-100"
@@ -749,7 +766,6 @@ export default function EmployeeDashboard() {
           skillExp: editSkillExp,
           primarySkill: editPrimarySkill,
           secondarySkill: editSecondarySkill,
-          isOnBench: editIsOnBench,
         })}
         employeeId={skillSummary?.employee_id || user?.employeeId || undefined}
         name={skillSummary?.name || user?.fullName || undefined}
@@ -760,7 +776,6 @@ export default function EmployeeDashboard() {
         skillExp={editSkillExp}
         primarySkill={editPrimarySkill}
         secondarySkill={editSecondarySkill}
-        isOnBench={editIsOnBench}
         skillCategories={skillCategories}
         onDesignationChange={setEditDesignation}
         onCurrentSkillChange={setEditCurrentSkill}
@@ -768,7 +783,6 @@ export default function EmployeeDashboard() {
         onSkillExpChange={setEditSkillExp}
         onPrimarySkillChange={setEditPrimarySkill}
         onSecondarySkillChange={setEditSecondarySkill}
-        onBenchToggle={() => setEditIsOnBench(v => !v)}
       />
 
       <EducationModal

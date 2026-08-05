@@ -972,7 +972,6 @@ interface SkillProfileModalProps {
   skillExp: number;
   primarySkill: string;
   secondarySkill: string;
-  isOnBench: boolean;
   skillCategories: string[];
   onDesignationChange: (v: string) => void;
   onCurrentSkillChange: (v: string) => void;
@@ -980,7 +979,6 @@ interface SkillProfileModalProps {
   onSkillExpChange: (v: number) => void;
   onPrimarySkillChange: (v: string) => void;
   onSecondarySkillChange: (v: string) => void;
-  onBenchToggle: () => void;
 }
 
 export function SkillProfileModal({
@@ -999,7 +997,6 @@ export function SkillProfileModal({
   skillExp,
   primarySkill,
   secondarySkill,
-  isOnBench,
   skillCategories,
   onDesignationChange,
   onCurrentSkillChange,
@@ -1007,7 +1004,6 @@ export function SkillProfileModal({
   onSkillExpChange,
   onPrimarySkillChange,
   onSecondarySkillChange,
-  onBenchToggle,
 }: SkillProfileModalProps) {
   return (
     <Modal
@@ -1101,47 +1097,20 @@ export function SkillProfileModal({
           </div>
         </div>
 
-        {/* Bench status card */}
-        <div
-          onClick={onBenchToggle}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") onBenchToggle();
-          }}
-          className={`flex cursor-pointer items-center justify-between gap-4 rounded-2xl border p-4 transition-all duration-200 sm:p-5 ${
-            isOnBench
-              ? "border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 shadow-sm"
-              : "border-slate-200 bg-slate-50 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${
-                isOnBench ? "bg-amber-100 text-amber-600" : "bg-white text-slate-400 ring-1 ring-slate-200"
-              }`}
-            >
-              <IconClock />
-            </div>
-            <div className="min-w-0">
-              <p className={`text-sm font-semibold ${isOnBench ? "text-amber-700" : "text-slate-700"}`}>
-                Currently on Bench
-              </p>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Let HR know you're available for new project allocation
-              </p>
-            </div>
+        {/* The manual "Currently on Bench" toggle used to live here. Bench
+            membership now comes from the directory — anyone whose department
+            is "Talent Pool" is on the bench, and they leave it automatically
+            when allocated to a project. A self-service toggle was a second
+            source of truth that nobody kept up to date. */}
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-white text-slate-400 ring-1 ring-slate-200">
+            <IconClock />
           </div>
-          <div
-            className={`flex h-6 w-11 flex-shrink-0 items-center rounded-full px-0.5 transition-colors duration-200 ${
-              isOnBench ? "bg-amber-400" : "bg-slate-300"
-            }`}
-          >
-            <div
-              className={`h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
-                isOnBench ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-700">Bench status</p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Managed by HR from your directory record — no action needed here.
+            </p>
           </div>
         </div>
       </div>

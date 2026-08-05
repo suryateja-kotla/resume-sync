@@ -1,31 +1,35 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
-import Login          from './pages/Login'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword  from './pages/ResetPassword'
-import ChangePassword from './pages/ChangePassword'
-import HRDashboard    from './pages/HRDashboard'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import ProtectedRoute, { homeFor } from './components/ProtectedRoute'
+import Login from './pages/Login'
+import HRDashboard from './pages/HRDashboard'
 import EmployeeDashboard from './pages/EmployeeDashboard'
+
+/** Sends each persona to their own dashboard. Used for "/" and for any
+ *  unmatched path, so nobody lands on a route their role cannot render. */
+function RoleHome() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (!user) return <Navigate to="/login" replace />
+  return <Navigate to={homeFor(user.role)} replace />
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public routes — no auth required */}
-          <Route path="/login"          element={<Login />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password"  element={<ResetPassword />} />
+          {/* The only public route. Password reset / change pages are gone —
+              credentials are managed entirely by Entra ID now. */}
+          <Route path="/login" element={<Login />} />
 
-          {/* Semi-protected — must be logged in but can have mustChangePassword=true */}
-          <Route path="/change-password" element={<ChangePassword />} />
+          {/* The OIDC callback redirects here after a successful sign-in. */}
+          <Route path="/" element={<RoleHome />} />
 
-          {/* Fully protected routes */}
           <Route
             path="/hr-dashboard"
             element={
-              <ProtectedRoute requiredRole="HR">
+              <ProtectedRoute requires="HR">
                 <HRDashboard />
               </ProtectedRoute>
             }
@@ -33,13 +37,13 @@ export default function App() {
           <Route
             path="/employee-dashboard"
             element={
-              <ProtectedRoute requiredRole="EMPLOYEE">
+              <ProtectedRoute>
                 <EmployeeDashboard />
               </ProtectedRoute>
             }
           />
 
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<RoleHome />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -305,6 +305,28 @@ export default function ProfileCard({
             </div>
           ) : (
             <>
+              {/* Values read from the resume rather than chosen. Current skill
+                  inference is only ~68% accurate — a resume shows what someone
+                  has accumulated, while current skill means the project they
+                  are on now. Saying so is what makes the guess safe: otherwise
+                  the profile looks confirmed and nobody corrects it. */}
+              {(skillSummary?.prefilled_fields?.length ?? 0) > 0 && (
+                <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs leading-relaxed text-amber-800">
+                    We filled some of this in from your resume.{" "}
+                    <button onClick={onEditSkillProfile} className="font-semibold underline underline-offset-2">
+                      Please check it is right
+                    </button>{" "}
+                    — especially your current skill, which should reflect the
+                    project you are on now.
+                  </p>
+                </div>
+              )}
+
               {/* Skill Cards */}
 
               <div className="grid grid-cols-2 gap-2.5">

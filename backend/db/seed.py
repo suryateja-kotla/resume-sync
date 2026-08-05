@@ -2,7 +2,6 @@ import logging
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import OperationFailure
-from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,7 +17,11 @@ logger = logging.getLogger(__name__)
 # clean permission error. Set to "false" to skip all index management at
 # startup entirely; an admin is expected to pre-create the needed indexes
 # out of band in that case. Defaults to "true" (normal behavior, e.g. Atlas).
-MANAGE_INDEXES = os.getenv("MANAGE_INDEXES", "false").lower() == "false"
+# NOTE: this comparison was inverted — it read `== "false"`, so setting
+# MANAGE_INDEXES=false (as this deployment does, deliberately) evaluated to
+# True and index management ran anyway, which is exactly the behaviour the
+# setting exists to prevent. Now: anything other than "false" enables it.
+MANAGE_INDEXES = os.getenv("MANAGE_INDEXES", "true").lower() != "false"
 
 
 async def _ensure_index(coro, description: str):
@@ -111,6 +114,40 @@ async def seed_database():
     if "resume_store" not in existing_collections:
         await db.create_collection("resume_store")
 
+    # ── SSO session storage ───────────────────────────────────────────────
+    # Sessions are server-side so they can be revoked; the browser cookie only
+    # carries an opaque id. The TTL index reaps expired rows, but expiry is
+    # also re-checked in Python on every lookup (session_service.get_session)
+    # — Mongo's reaper runs about once a minute, and an expired-but-still-
+    # present row must never be honoured. That double check also means the app
+    # stays correct where MANAGE_INDEXES=false prevents the TTL index existing.
+    if "sessions" not in existing_collections:
+        await db.create_collection("sessions")
+    await _ensure_index(
+        db.sessions.create_index("session_hash", unique=True),
+        "sessions.session_hash unique",
+    )
+    await _ensure_index(
+        db.sessions.create_index("expires_at", expireAfterSeconds=0),
+        "sessions.expires_at TTL",
+    )
+    await _ensure_index(
+        db.sessions.create_index("employee_id"),
+        "sessions.employee_id",  # bulk revoke on offboarding
+    )
+
+    # Short-lived state/nonce/PKCE-verifier records for in-flight sign-ins.
+    if "login_transactions" not in existing_collections:
+        await db.create_collection("login_transactions")
+    await _ensure_index(
+        db.login_transactions.create_index("state_hash", unique=True),
+        "login_transactions.state_hash unique",
+    )
+    await _ensure_index(
+        db.login_transactions.create_index("expires_at", expireAfterSeconds=0),
+        "login_transactions.expires_at TTL",
+    )
+
     logger.info("Database and collections are set up successfully.")
 
     # Unique indexes. Several of these were created by hand through the
@@ -143,19 +180,16 @@ async def seed_database():
             )
     logger.info("Unique indexes ensured on all collections (where permitted).")
 
-    # Seed HR user account only if not already present
-    hr_exists = await db.user_accounts.find_one({"employeeId": "HR001"})
-    if not hr_exists:
-        now = datetime.now(timezone.utc)
-        await db.user_accounts.insert_one(
-            {
-                "employeeId":  "HR001",
-                "email":       "hr@sailssoftware.com",
-                "status":      "Active",
-                "role":        "HR",
-                "lastLoginAt": now,
-            }
-        )
-        logger.info("HR user_account seed record inserted.")
-    else:
-        logger.info("HR user_account already exists, skipping...")
+    # The old HR001 / hr@sailssoftware.com seed record is gone. It was a
+    # placeholder with no counterpart in Entra — the real HR identities are
+    # ordinary directory accounts (Kavita Dasgupta is SS040, department HR).
+    # Under SSO nobody can sign in as HR001, since sign-in requires a verified
+    # Entra identity whose employeeId matches, so leaving the row would only
+    # be a confusing orphan carrying an HR role.
+    #
+    # Admin access is no longer a database row at all: it comes from the
+    # ADMIN_EMAILS allowlist in deployment config, so it cannot be granted by
+    # anyone who merely has write access to Mongo.
+    removed = await db.user_accounts.delete_one({"employeeId": "HR001"})
+    if removed.deleted_count:
+        logger.info("Removed obsolete HR001 placeholder account.")

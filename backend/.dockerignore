@@ -7,3 +7,9 @@ __pycache__/
 .git/
 .pytest_cache/
 *.egg-info/
+
+# Dev/ops tooling — regression tests and diagnostics run manually against a
+# real Entra tenant, not something the running app imports. Keeping them out
+# of the image is optional (they're inert either way, no secrets, no
+# imports from main.py) but there's no reason to ship them.
+scripts/

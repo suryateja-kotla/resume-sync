@@ -4,11 +4,11 @@ import api from '../../api/axios'
 import { NewEmployee } from '../../types/hr'
 
 interface Props {
-  actorEmail?: string
   onCountChange: (count: number) => void
 }
 
-export default function NewEmployeesSection({ actorEmail, onCountChange }: Props) {
+// actorEmail is gone: the invite's audit entry records the signed-in HR user.
+export default function NewEmployeesSection({ onCountChange }: Props) {
   const [newEmployees, setNewEmployees] = useState<NewEmployee[]>([])
   const [loading, setLoading] = useState(false)
   const [sendingInvite, setSendingInvite] = useState<string | null>(null)
@@ -26,6 +26,8 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
   const fetchNewEmployees = async () => {
     setLoading(true)
     try {
+      // Bypasses the section cache deliberately: this list changes as invites
+      // are sent from this very screen, so it must reflect the latest state.
       const { data } = await api.get('/hr/new-employees')
       if (data.status === 'success') {
         setNewEmployees(data.data)
@@ -38,7 +40,7 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
   const sendInvite = async (email: string) => {
     setSendingInvite(email)
     try {
-      const { data } = await api.post('/hr/send-resume-invite', { email, actor_email: actorEmail })
+      const { data } = await api.post('/hr/send-resume-invite', { email })
       setInviteStatus(prev => ({ ...prev, [email]: data.status === 'success' ? 'sent' : 'error' }))
     } catch {
       setInviteStatus(prev => ({ ...prev, [email]: 'error' }))
@@ -67,7 +69,7 @@ export default function NewEmployeesSection({ actorEmail, onCountChange }: Props
         continue
       }
       try {
-        const { data } = await api.post('/hr/send-resume-invite', { email, actor_email: actorEmail })
+        const { data } = await api.post('/hr/send-resume-invite', { email })
         results.push({
           email,
           status: data.status === 'success' ? 'sent' : 'error',

@@ -4,6 +4,26 @@ interface Props {
   pendingLabel?: string;
   onCtaClick?: () => void;
   ctaLabel?: string;
+  /** When the skill profile was last saved. Drives the staleness nudge. */
+  lastUpdatedAt?: string | null;
+}
+
+/** "3 months ago" — or null when it is recent enough not to mention.
+ *
+ *  A completeness percentage says nothing about freshness: 251 of 258 people
+ *  are at 100% and have not touched their profile since the July seed. Stale
+ *  data looks identical to current data unless you say when it was written.
+ */
+function stalenessLabel(iso?: string | null): string | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+
+  const months = Math.floor((Date.now() - then) / (1000 * 60 * 60 * 24 * 30));
+  if (months < 2) return null; // recent enough — do not nag
+  if (months < 12) return `${months} months ago`;
+  const years = Math.floor(months / 12);
+  return years === 1 ? "over a year ago" : `over ${years} years ago`;
 }
 
 const getGreeting = (hour: number) => {
@@ -18,10 +38,12 @@ export default function WelcomeBanner({
   pendingLabel,
   onCtaClick,
   ctaLabel = "Complete Now",
+  lastUpdatedAt,
 }: Props) {
   const greeting = getGreeting(new Date().getHours());
   const firstName = (name || "").trim().split(" ")[0] || name || "there";
   const isComplete = completePct >= 100;
+  const stale = stalenessLabel(lastUpdatedAt);
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-700 via-indigo-700 to-fuchsia-700 px-5 py-4 shadow-lg shadow-indigo-950/20 sm:px-7 sm:py-5">
@@ -48,8 +70,19 @@ export default function WelcomeBanner({
                 reach 100%.
               </>
             )}
-            {isComplete && " Great job keeping everything up to date."}
+            {isComplete && !stale && " Great job keeping everything up to date."}
           </p>
+
+          {/* Shown even at 100% — complete and current are different things. */}
+          {stale && (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-400/20 px-3 py-1.5 text-xs font-medium text-amber-50 ring-1 ring-amber-300/30">
+              <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Your skill profile was last updated {stale} — is it still accurate?
+            </p>
+          )}
         </div>
 
         {!isComplete && onCtaClick && (

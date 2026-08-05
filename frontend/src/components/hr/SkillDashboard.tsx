@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Download, Filter, Sparkles, ArrowLeft, History } from 'lucide-react'
 import api, { API_BASE_URL } from '../../api/axios'
+import { useCachedResource } from '../../hooks/useCachedResource'
 import { SkillRack, SkillEmployee, getSkillBadgeClass } from '../../types/hr'
 import { getSkillMeta } from './skillMeta'
 import SkillChips from './SkillChips'
@@ -15,35 +16,26 @@ const EXP_FILTER_OPTIONS = [
   { value: '8', label: '8+ yrs' },
 ]
 
-interface Props {
-  actorEmail?: string
-}
-
 function fmt(date?: string) {
   if (!date) return '—'
   return new Date(date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
 }
 
-export default function SkillDashboard({ actorEmail }: Props) {
-  const [skillRacks, setSkillRacks] = useState<SkillRack[]>([])
-  const [loading, setLoading] = useState(false)
+// actorEmail is gone: the backend records the signed-in HR user as the actor.
+export default function SkillDashboard() {
+  // Cached across section switches — returning to this screen renders from
+  // cache immediately and refreshes in the background if stale.
+  const { data: rackData, loading } = useCachedResource<{ status: string; data: SkillRack[] }>(
+    'hr:skill-racks', '/hr/skill-summary'
+  )
+  const skillRacks: SkillRack[] = rackData?.status === 'success' ? rackData.data : []
+
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null)
   const [skillEmployees, setSkillEmployees] = useState<SkillEmployee[]>([])
   const [skillEmployeesLoading, setSkillEmployeesLoading] = useState(false)
   const [excelGenerating, setExcelGenerating] = useState(false)
   const [expFilter, setExpFilter] = useState<string>('')
   const [historyModal, setHistoryModal] = useState<SkillEmployee | null>(null)
-
-  useEffect(() => { fetchSkillRacks() }, [])
-
-  const fetchSkillRacks = async () => {
-    setLoading(true)
-    try {
-      const { data } = await api.get('/hr/skill-summary')
-      if (data.status === 'success') setSkillRacks(data.data)
-    } catch { /* ignore */ }
-    finally { setLoading(false) }
-  }
 
   const openSkillRack = async (skill: string) => {
     setSelectedSkill(skill)
@@ -82,7 +74,6 @@ export default function SkillDashboard({ actorEmail }: Props) {
     try {
       const params: Record<string, string> = { skill: selectedSkill }
       if (expFilter !== '') params.min_skill_exp = expFilter
-      if (actorEmail) params.actor_email = actorEmail
       const { data } = await api.get('/hr/skill-employees-excel', { params })
       if (data.status === 'success' && data.excel_filename) {
         window.open(`${API_BASE_URL}/download-excel?filename=${encodeURIComponent(data.excel_filename)}`, '_blank')

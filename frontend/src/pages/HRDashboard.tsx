@@ -6,12 +6,12 @@ import {
   ChevronRight,
   LogOut,
   Menu,
+  ScrollText,
   ShieldCheck,
   UserPlus,
   Users,
   X,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Section } from '../types/hr'
 import NewEmployeesSection from '../components/hr/NewEmployeesSection'
@@ -22,18 +22,16 @@ import MetricsSection from '../components/hr/MetricsSection'
 import AuditLogSection from '../components/hr/AuditLogSection'
 
 export default function HRDashboard() {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
+  const { user, logout, isAdmin } = useAuth()
   const [section, setSection] = useState<Section>('employee-list')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [newEmployeeCount, setNewEmployeeCount] = useState(0)
   const [benchCount, setBenchCount] = useState(0)
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+  // logout() revokes the session server-side and navigates to /login itself,
+  // so there is no navigate() call to race it here.
+  const handleLogout = () => { logout() }
 
   const selectSection = (s: Section) => {
     setSection(s)
@@ -41,11 +39,21 @@ export default function HRDashboard() {
   }
 
   const NAV_ITEMS: { key: Section; label: string; icon: typeof UserPlus }[] = [
-    { key: 'new-employees', label: 'New Employees', icon: UserPlus },
+    // New Employees sends onboarding invites to arbitrary addresses, so it is
+    // ADMIN-only — matching require_admin on both of its endpoints.
+    ...(isAdmin
+      ? [{ key: 'new-employees' as Section, label: 'New Employees', icon: UserPlus }]
+      : []),
     { key: 'skill-dashboard', label: 'Skill Dashboard', icon: BarChart3 },
     { key: 'employee-list', label: 'Employee List', icon: Users },
     { key: 'talent-pool', label: 'Talent Pool', icon: BriefcaseBusiness },
     { key: 'metrics', label: 'Monitoring', icon: ShieldCheck },
+    // Audit log is ADMIN-only, matching require_admin on the backend. Hiding
+    // it is a UX courtesy — an HR user who navigates here anyway gets an
+    // empty panel, because the API returns 403 regardless of the nav.
+    ...(isAdmin
+      ? [{ key: 'audit-log' as Section, label: 'Audit Log', icon: ScrollText }]
+      : []),
   ]
 
   return (
@@ -122,18 +130,10 @@ export default function HRDashboard() {
                 </button>
               )
             })}
-
-            <button
-              onClick={() => selectSection('audit-log')}
-              className={`mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm transition ${
-                section === 'audit-log' ? 'bg-white/10 text-white' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
-              }`}
-            >
-              <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl ${section === 'audit-log' ? 'bg-white/10 text-white' : 'bg-white/5 text-slate-500'}`}>
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-              <span className={`text-xs uppercase tracking-[0.2em] ${sidebarCollapsed ? 'lg:hidden' : ''}`}>Audit Log</span>
-            </button>
+            {/* Audit Log used to be a second, hardcoded button here. It was
+                ungated, so HR users saw an entry that opened an empty panel —
+                the API returns 403 for them. It now lives in NAV_ITEMS above,
+                rendered only when isAdmin. */}
           </div>
         </div>
 
@@ -177,12 +177,12 @@ export default function HRDashboard() {
         </div>
 
         {/* Section bodies */}
-        {section === 'new-employees'   && <NewEmployeesSection actorEmail={user?.email} onCountChange={setNewEmployeeCount} />}
-        {section === 'skill-dashboard' && <SkillDashboard actorEmail={user?.email} />}
-        {section === 'employee-list'   && <EmployeeListSection actorEmail={user?.email} />}
+        {section === 'new-employees'   && isAdmin && <NewEmployeesSection onCountChange={setNewEmployeeCount} />}
+        {section === 'skill-dashboard' && <SkillDashboard />}
+        {section === 'employee-list'   && <EmployeeListSection />}
         {section === 'talent-pool'     && <TalentPool onCountChange={setBenchCount} />}
         {section === 'metrics'         && <MetricsSection />}
-        {section === 'audit-log'       && <AuditLogSection />}
+        {section === 'audit-log'       && isAdmin && <AuditLogSection />}
       </main>
     </div>
   )

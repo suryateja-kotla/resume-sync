@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {{
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          margin: 0;
+          padding: 0;
+          background-color: #f4f4f7;
+      }}
+      .container {{
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 20px;
+      }}
+      .header {{
+          /* Solid, not gradient — classic Outlook (Word rendering engine)
+             does not support CSS gradients and would show an unpredictable
+             fallback. #5b21b6 sits inside the brand's purple-to-indigo
+             range so it reads as "on brand" even as a flat fill. */
+          background-color: #5b21b6;
+          color: white;
+          padding: 26px 24px 24px;
+          border-radius: 8px 8px 0 0;
+          text-align: center;
+      }}
+      .header h2 {{
+          margin: 0;
+          font-size: 22px;
+          letter-spacing: -0.3px;
+      }}
+      .header p {{
+          margin: 6px 0 0;
+          font-size: 13px;
+          color: #ddd6fe;
+      }}
+      .brand-mark {{
+          margin: 0 0 16px;
+      }}
+      .brand-badge {{
+          /* White backing behind the mark, matching the rounded-pill
+             treatment on the sign-in page — the icon's own purple/fuchsia
+             gradient would otherwise blend into this equally-purple header. */
+          width: 34px;
+          height: 34px;
+          background-color: #ffffff;
+          border-radius: 9px;
+          text-align: center;
+          vertical-align: middle;
+      }}
+      .brand-name {{
+          font-family: Arial, sans-serif;
+          font-weight: bold;
+          font-size: 15px;
+          color: #ffffff;
+          padding-left: 10px;
+          vertical-align: middle;
+      }}
+      .content {{
+          background-color: white;
+          padding: 30px 28px;
+          border-radius: 0 0 8px 8px;
+      }}
+      .about {{
+          background-color: #f5f3ff;
+          border-left: 3px solid #7c3aed;
+          padding: 16px 18px;
+          margin: 22px 0;
+          border-radius: 4px;
+      }}
+      .about h3 {{
+          margin: 0 0 8px;
+          font-size: 14px;
+          color: #5b21b6;
+      }}
+      .about ul {{
+          margin: 8px 0 0;
+          padding-left: 18px;
+          font-size: 13.5px;
+          color: #4c1d95;
+      }}
+      .about li {{ margin-bottom: 5px; }}
+      .steps {{
+          margin: 20px 0;
+          padding-left: 20px;
+          font-size: 14.5px;
+      }}
+      .steps li {{ margin-bottom: 9px; }}
+      .button-group {{
+          margin: 28px 0 8px;
+          text-align: center;
+      }}
+      .button {{
+          padding: 12px 26px;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: bold;
+          font-size: 15px;
+          display: inline-block;
+          text-align: center;
+          margin: 4px 6px;
+      }}
+      .btn-yes {{
+          background-color: #7c3aed;
+          color: white;
+      }}
+      .btn-no {{
+          background-color: #ffffff;
+          color: #64748b;
+          border: 1px solid #cbd5e1;
+      }}
+      .footer {{
+          margin-top: 26px;
+          font-size: 12px;
+          color: #666;
+          text-align: center;
+          border-top: 1px solid #eee;
+          padding-top: 15px;
+      }}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <!-- Table-based lockup, not flex/div — Outlook's Word engine only
+             lays out tables reliably. The logo is a CID-embedded attachment
+             (see graph_mail_service.py), not an inline data URI: data URIs
+             in `src` are well known to fail silently in classic Outlook,
+             while a CID reference to a real MIME attachment is the mechanism
+             transactional-email providers use specifically because Outlook
+             honours it. Width/height are set as HTML attributes rather than
+             left to CSS, since Outlook does not reliably apply CSS sizing
+             to images either. -->
+        <table role="presentation" class="brand-mark" align="center" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="brand-badge">
+              <img src="cid:syncfolio-mark" width="24" height="24" alt="SyncFolio"
+                   style="display:block;margin:5px auto;border:0;" />
+            </td>
+            <td class="brand-name">SyncFolio</td>
+          </tr>
+        </table>
+        <h2>{heading}</h2>
+        <p>{subheading}</p>
+      </div>
+      <div class="content">
+        <p>Hello {name},</p>
+        {body_html}
+        <div class="button-group">
+          {buttons_html}
+        </div>
+        <div class="footer">
+          <p>Thanks,<br />The SyncFolio Team</p>
+          <p style="margin-top: 10px; font-size: 11px">
+            If the button does not work, copy and paste this link into your
+            browser:
+            <br /><a href="{update_url}">{update_url}</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

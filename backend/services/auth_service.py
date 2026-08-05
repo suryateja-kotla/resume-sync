@@ -1,184 +1,164 @@
 """
-Auth service — password hashing, JWT creation/validation, FastAPI dependency.
+Request-time authentication and authorization.
 
-Design decisions:
-- Access token: short-lived (8 h), carries employeeId + role.
-- Refresh token: long-lived (7 d), stored as a hash in user_accounts so it can
-  be invalidated on logout or password change.
-- Reset token: one-time, stored as a SHA-256 hash in user_accounts with an
-  expiry timestamp. The raw token is sent in the email; the DB never sees it.
-- Rate limiting: handled at the route layer via slowapi (5 login attempts / 15 min).
+Everything the application uses to answer "who is calling, and may they do
+this?" lives here. Routes attach these as FastAPI dependencies; they never
+read identity out of a request parameter.
+
+That last point is the correction of a specific, serious flaw in the previous
+design: routes took `?email=` and `?actor_email=` from the query string and
+trusted them. Anyone could read or modify anyone's record, and could choose
+whose name appeared in the audit log. Identity now comes only from the session,
+which the caller cannot forge.
+
+Three levels:
+
+    get_current_user  any signed-in employee
+    require_hr        HR or ADMIN  — read-only views plus Excel export
+    require_admin     ADMIN only   — delete employee, audit log
+
+HR deliberately does *not* include destructive actions. Twenty-eight people
+resolve to HR against the live directory; delete-employee should not be twenty-
+eight people's to press.
 """
 
-import hashlib
-import logging
-import os
-import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from __future__ import annotations
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import bcrypt as _bcrypt_lib
-from jose import JWTError, jwt
+import logging
+from typing import Any
+
+from fastapi import Depends, HTTPException, Request, status
+
+from config.entra_config import settings
+from services.role_service import Role
+from services.session_service import get_session, verify_csrf
 
 logger = logging.getLogger(__name__)
 
-# ── Config ────────────────────────────────────────────────────────────────────
-
-SECRET_KEY     = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
-ALGORITHM      = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_EXPIRY  = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))   # 8 h
-REFRESH_EXPIRY = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS",   "7"))     # 7 d
-RESET_EXPIRY   = int(os.getenv("RESET_TOKEN_EXPIRE_MINUTES",  "30"))    # 30 min
-
-# ── Password hashing — uses bcrypt directly (avoids passlib compat issues) ───
-
-def hash_password(plain: str) -> str:
-    return _bcrypt_lib.hashpw(plain.encode(), _bcrypt_lib.gensalt(rounds=12)).decode()
+# Methods that change state and therefore need CSRF verification. GET/HEAD/
+# OPTIONS are exempt because they must not have side effects in the first
+# place — if one of them does, that is the bug to fix.
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return _bcrypt_lib.checkpw(plain.encode(), hashed.encode())
-    except Exception:
-        return False
+class CurrentUser(dict):
+    """Session identity. A dict subclass so existing `current_user["..."]`
+    access keeps working, with attribute access for readability."""
+
+    @property
+    def employee_id(self) -> str:
+        return self["employee_id"]
+
+    @property
+    def role(self) -> str:
+        return self["role"]
+
+    @property
+    def email(self) -> str:
+        return self["email"]
+
+    @property
+    def is_admin(self) -> bool:
+        return self["role"] == Role.ADMIN.value
+
+    @property
+    def is_hr(self) -> bool:
+        return self["role"] in (Role.HR.value, Role.ADMIN.value)
 
 
-def is_same_password(plain: str, hashed: str) -> bool:
-    """True when the new password is identical to the current one."""
-    return verify_password(plain, hashed)
+async def get_current_user(request: Request) -> CurrentUser:
+    """Resolve the caller from the session cookie, enforcing CSRF on writes.
 
-
-# ── Password strength ─────────────────────────────────────────────────────────
-
-def validate_password_strength(password: str) -> Optional[str]:
+    Raises 401 when there is no valid session, 403 when the CSRF token is
+    missing or wrong.
     """
-    Returns an error message string if the password is too weak, else None.
-    Rules: 8+ chars, at least one uppercase, one lowercase, one digit.
-    """
-    if len(password) < 8:
-        return "Password must be at least 8 characters long."
-    if not any(c.isupper() for c in password):
-        return "Password must contain at least one uppercase letter."
-    if not any(c.islower() for c in password):
-        return "Password must contain at least one lowercase letter."
-    if not any(c.isdigit() for c in password):
-        return "Password must contain at least one digit."
-    return None
-
-
-# ── JWT helpers ───────────────────────────────────────────────────────────────
-
-def create_access_token(employee_id: str, role: str) -> str:
-    expiry = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_EXPIRY)
-    payload = {
-        "sub":  employee_id,
-        "role": role,
-        "type": "access",
-        "exp":  expiry,
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def create_refresh_token(employee_id: str) -> tuple[str, str]:
-    """
-    Returns (raw_token, hashed_token).
-    Store the hash in DB; send the raw token to the client.
-    """
-    expiry = datetime.now(timezone.utc) + timedelta(days=REFRESH_EXPIRY)
-    payload = {
-        "sub":  employee_id,
-        "type": "refresh",
-        "exp":  expiry,
-    }
-    signed = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    hashed = _hash_token(signed)
-    return signed, hashed
-
-
-def decode_access_token(token: str) -> dict:
-    """
-    Decodes and validates an access token.
-    Raises HTTPException 401 on any failure.
-    """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") != "access":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail="Invalid token type.")
-        return payload
-    except JWTError:
+    session_id = request.cookies.get(settings.session_cookie_name)
+    if not session_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token is invalid or has expired. Please log in again.",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Not signed in.",
         )
 
-
-def decode_refresh_token(token: str) -> dict:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") != "refresh":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail="Invalid token type.")
-        return payload
-    except JWTError:
+    session = await get_session(session_id)
+    if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token is invalid or has expired. Please log in again.",
+            detail="Your session has expired. Please sign in again.",
         )
 
+    if request.method in _UNSAFE_METHODS:
+        submitted = request.headers.get("X-CSRF-Token")
+        if not verify_csrf(session, submitted):
+            logger.warning(
+                "CSRF check failed for %s on %s %s",
+                session.get("employee_id"),
+                request.method,
+                request.url.path,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid or missing CSRF token.",
+            )
 
-# ── Reset token helpers ───────────────────────────────────────────────────────
-
-def generate_reset_token() -> tuple[str, str, datetime]:
-    """
-    Returns (raw_token, hashed_token, expires_at).
-    Send raw_token in the email; store hashed_token in DB.
-    """
-    raw = secrets.token_urlsafe(32)
-    hashed = _hash_token(raw)
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=RESET_EXPIRY)
-    return raw, hashed, expires_at
-
-
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def hash_reset_token(raw: str) -> str:
-    return _hash_token(raw)
-
-
-# ── FastAPI dependency — get_current_user ─────────────────────────────────────
-
-bearer_scheme = HTTPBearer()
+    return CurrentUser(
+        employee_id=session["employee_id"],
+        role=session["role"],
+        email=session["email"],
+        display_name=session.get("display_name", ""),
+        entra_object_id=session.get("entra_object_id"),
+    )
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-) -> dict:
-    """
-    Validates the Bearer token and returns the decoded payload.
-    Raises 401 if token is missing, invalid, or expired.
-    Import and use as: current_user = Depends(get_current_user)
-    """
-    payload = decode_access_token(credentials.credentials)
-    return {
-        "employee_id": payload["sub"],
-        "role":        payload["role"],
-    }
-
-
-async def require_hr(current_user: dict = Depends(get_current_user)) -> dict:
-    """
-    Dependency that ensures the caller has the HR role.
-    Use on all /hr/* routes.
-    """
-    if current_user["role"] != "HR":
+async def require_hr(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """HR or ADMIN. Use on read-only HR views and Excel exports."""
+    if not current_user.is_hr:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access restricted to HR accounts.",
+            detail="This area is restricted to HR.",
         )
     return current_user
+
+
+async def require_admin(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """ADMIN only. Use on destructive actions and the audit log."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action is restricted to administrators.",
+        )
+    return current_user
+
+
+def assert_owns_record(current_user: CurrentUser, employee_id: str) -> None:
+    """Guard for routes addressed by employee id.
+
+    An employee may only ever touch their own record; HR and ADMIN may touch
+    any. Without this, adding a session check alone would still leave the
+    original IDOR intact — authentication is not authorization.
+    """
+    if current_user.is_hr:
+        return
+    if current_user.employee_id != employee_id:
+        logger.warning(
+            "IDOR attempt: %s tried to access %s",
+            current_user.employee_id,
+            employee_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only access your own record.",
+        )
+
+
+def public_user(current_user: CurrentUser) -> dict[str, Any]:
+    """Shape returned by /auth/me — no session internals leak to the client."""
+    return {
+        "employee_id": current_user["employee_id"],
+        "email": current_user["email"],
+        "full_name": current_user.get("display_name", ""),
+        "role": current_user["role"],
+    }

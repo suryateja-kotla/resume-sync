@@ -5,6 +5,9 @@ export interface NewEmployee {
   name: string
   email: string
   department?: string
+  job_title?: string
+  /** True when they have a skill profile but still no resume. */
+  has_profile?: boolean
 }
 
 export interface SkillRack {
